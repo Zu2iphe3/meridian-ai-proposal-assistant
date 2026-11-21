@@ -26,19 +26,9 @@ jobs:
       - run: python -m ruff format --check .
       - run: python -m mypy src
       - run: python -m pytest -m "not browser and not llm"
-      - name: Detect the browser suite
-        id: browser
-        run: |
-          if find tests -name 'test_*.py' -path 'tests/browser/*' | grep -q .; then
-            echo "present=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "Chromium suite is pending integration verification."
-          fi
       - name: Install Chromium
-        if: steps.browser.outputs.present == 'true'
         run: python -m playwright install --with-deps chromium
       - name: Run browser tests
-        if: steps.browser.outputs.present == 'true'
         run: python -m pytest -m browser
 
   secrets:
