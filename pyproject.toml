@@ -6,10 +6,10 @@ build-backend = "setuptools.build_meta"
 name = "meridian-agent"
 version = "0.1.0"
 requires-python = ">=3.12"
-dependencies = ["fastapi", "uvicorn", "pydantic>=2"]
+dependencies = ["fastapi", "uvicorn", "pydantic>=2", "httpx"]
 
 [project.optional-dependencies]
-dev = ["httpx", "pytest", "pytest-playwright", "ruff", "mypy"]
+dev = ["pytest", "pytest-playwright", "ruff", "mypy"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
