@@ -20,3 +20,31 @@ Original tool: `web/vendor/challenge-generator.html`  sha256: `bd20df4c79e70da57
 | 12 | Optional `loadProposal(obj, {preview:true})` opens preview instead of editor. | Not needed for MVP. |
 
 Not yet verified: file:// iframe behaviour (irrelevant if we serve over http), export/PDF flow.
+
+## Handoff for financial verification and PM review
+
+The generator's public API accepts a partial object merged into its blank
+proposal. Extraction supplies evidence for review. A schema-valid extraction
+response alone does not authorize loading a draft.
+
+| Reviewed fact | Generator handoff |
+|---|---|
+| Client | `clientName` |
+| Investment capital | Verified, normalized digit string at `strategy.keyFigures.totalInvestment` |
+| Currency | Supported code at `goalAssessment.currency` after verification and PM confirmation if ambiguous |
+| Horizon and risk | `objective.investmentHorizon` and `objective.riskProfileCategory` using supported dropdown options |
+| Income need | Review context only. An independently verified monthly amount maps to `strategy.keyFigures.incomeValue` |
+| Portfolio preference | After PM selection, map to a discovered `applyModel` ID or validated `strategy.allocation` |
+| Adviser fee | Verified percentage string at `fees.advisorFee` |
+
+Other inputs such as recipient details, needs, mandate, benchmark and return
+objective can be supplied or approved separately by the PM. Model defaults
+are shown as defaults. A source suggestion does not become an approved value.
+The review step shows accepted text and original evidence, clearly marks
+approximation, and lists missing or conflicting core facts for correction.
+Unresolved values stay blank in the mapped draft.
+
+Issue #5 can test normalized amounts and conflicts using deterministic source
+notes and saved candidates. Issue #6 can use mocked reviewed data to test
+the mapper, approval gate and exactly one generator draft per approval.
+These tests can run offline independently of the live provider benchmark.

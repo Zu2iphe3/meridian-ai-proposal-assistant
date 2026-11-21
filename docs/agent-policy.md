@@ -16,3 +16,9 @@ These rules will be enforced through prompt instructions and programmatic valida
 10. Do not log API keys; do not retain client notes beyond the local session log (git-ignored).
 11. Give useful errors when the model or transcription fails.
 12. The generator must keep working when AI is unavailable.
+13. Clearly incompatible text-field values are withheld, including money expressions
+    used as client names and financial targets used as portfolio preferences.
+    Bare digits in names and portfolio allocation percentages are not blanket exclusions.
+14. Tentative portfolio, risk and horizon wording requires PM confirmation. Keep the
+    proposed text and evidence in review material; do not present it as an accepted fact.
+    Rejected quotes that cannot be located in the notes must never be labelled verified.
