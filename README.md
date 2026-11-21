@@ -17,7 +17,12 @@ Open the generator at `http://127.0.0.1:8000/web/vendor/challenge-generator.html
 
 ## Extract candidates locally
 
-Start Ollama on loopback and use an installed local model. Defaults are `OLLAMA_HOST=http://127.0.0.1:11434`, `OLLAMA_MODEL=llama3.2:3b` and `OLLAMA_TIMEOUT_SECONDS=90`. Set these environment variables before starting FastAPI to change them. Keep Ollama in local-only mode (`OLLAMA_NO_CLOUD=1`) when using meeting notes.
+Start Ollama on loopback and use an installed local model. Defaults are `OLLAMA_HOST=http://127.0.0.1:11434`, `OLLAMA_MODEL=qwen2.5:3b` and `OLLAMA_TIMEOUT_SECONDS=180`. Set these environment variables before starting FastAPI to change them. Keep Ollama in local-only mode (`OLLAMA_NO_CLOUD=1`) when using meeting notes.
+
+See `.env.example` for the process environment settings. Extraction uses one
+local inference request. The model proposes fields and supporting quotes. Python
+derives source status, checks money and conflicts, and accepts only the eight
+core fields. Other proposals are suggestions for the portfolio manager.
 
 Example using fictional notes in PowerShell:
 
@@ -26,7 +31,12 @@ $body = @{ notes = (Get-Content challenge/sample-inputs/01-notes-retiree-income.
 Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/api/extract -ContentType 'application/json; charset=utf-8' -Body $body
 ```
 
-The endpoint accepts up to 4,000 characters. It returns source-backed candidate fields, conflicts, gap reasons, and a withheld-candidate count. A rejected field leaves a gap while other supported fields can still be reviewed. Source matching verifies traceability. Financial meaning and proposal mapping are separate steps.
+The endpoint accepts up to 4,000 characters. It returns core fields, grounded
+conflicts, gap reasons and review candidates. Review candidates keep their
+proposed text, verified quote when available and disposition. Missing values
+stay blank for PM review. Provisional and conflicting information stays out of
+the accepted values. Financial verification and proposal mapping are subsequent
+steps.
 
 ## Checks
 

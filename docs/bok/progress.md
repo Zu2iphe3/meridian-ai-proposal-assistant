@@ -64,3 +64,41 @@ The local Qwen run returned HTTP 200 on all four supplied cases and both unseen 
 The complete local suite passed 43 tests, including Chromium and the focused regressions, with four opt-in tests skipped. The six live HTTP calls were verified separately. Ruff, mypy, and diff whitespace checks passed. The vendor SHA-256 remains unchanged. Issue #4 is awaiting review and commit approval.
 
 The updated challenge requires a working demo, runnable code with a README and a short engineering write-up. Model choice and handling of ambiguous portfolio labels require validation. Ask the portfolio manager to confirm unclear labels. Confirm permission before sharing the supplied generator and review the outstanding questionnaire before submission.
+
+The proposed Issue #4 revision uses one Qwen 2.5 3B call and a minimal
+field/value/quote/reason contract. Python derives status, limits acceptance to
+eight core fields, and retains noncore proposals for review. A single live
+smoke recovered 22/24 facts, including Sarah's approximate amount. The subsequent
+post-tuning pass recovered 56/84 facts from the previously seen locked pack,
+with zero incorrect accepted values or timeouts. The median was 40.86 seconds
+and p95 was 58.63 seconds. H12 accepted no fields, because the model cited the
+planted instruction as evidence even for genuine values. The pack remains below
+the agreed coverage and latency targets. Issue #4 is open for review. Follow-up
+verification and mapper tests can use deterministic fixtures independently of
+live inference.
+
+### Independent manual Swagger checks
+
+The portfolio manager independently tested four fictional notes through Swagger
+using the proposed Qwen 2.5 3B implementation. These user-reported results are
+separate from the locked benchmark and the developer smoke run.
+
+| Manual case | Correct / determinate | Observation |
+|---|---:|---|
+| 1 | 7/8 | One determinate fact was withheld. |
+| 2 | 6/8 | Two determinate facts were withheld. |
+| 3 | 4/4 | Missing information stayed blank. |
+| 4 | 6/7 | Neither competing adviser fee was accepted. |
+| Total | 23/27 (85.2%) | Zero incorrect accepted fields reported. |
+
+Explicit income or no-income wording, equivalent adviser fee forms and
+paraphrased quotes can still cause correct proposals to be withheld. Competing
+fees stayed blank in case 4, but no structured conflict was surfaced.
+
+Issue #5 will scan the entire original note for financial expressions,
+independently of the model's evidence quotes, and reconcile those findings
+with its proposed roles. It will verify equivalent numeric forms and income
+frequency or absence against source context, preserve the original evidence,
+and surface competing figures for PM review. The case with competing adviser
+fees is a required regression. These findings do not change the extraction
+prompt or close Issue #4.

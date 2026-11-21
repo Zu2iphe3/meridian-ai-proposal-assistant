@@ -1,6 +1,7 @@
 """Locate exact source excerpts and check simple field attribution."""
 
 import re
+from decimal import Decimal
 from typing import Literal
 
 _QUOTES = str.maketrans({"“": '"', "”": '"', "‘": "'", "’": "'"})
@@ -19,12 +20,14 @@ _META_INSTRUCTIONS = re.compile(
 _NO_INCOME = (
     r"\b(?:no (?:monthly )?(?:income|drawdown) (?:is )?(?:required|needed)"
     r"|(?:income|drawdown) (?:is )?not (?:needed|required)"
-    r"|(?:does not|do not|won't|will not) (?:need|require) (?:any )?"
+    r"|no need for (?:any )?(?:monthly )?(?:income|drawdown)"
+    r"|(?:does not|do not|doesn['’]t|don['’]t|won['’]t|will not) (?:need|require) (?:any )?"
     r"(?:monthly )?(?:income|drawdown))\b"
 )
-_YES_INCOME = r"\b(?:needs? (?:a |monthly )?income|draw an income|(?:required?|wants?) (?:a |monthly )?income|income (?:is )?(?:needed|required))\b"
+_YES_INCOME = r"\b(?:needs? (?:a |monthly )?income|draw an income|(?:requires?|wants?) (?:a |monthly )?income|income (?:is )?(?:needed|required))\b"
 _AMBIGUOUS_CHOICE = re.compile(
-    r"\b(?:if|unless|whether|might|may|possibly|unclear|unknown|unconfirmed|never said|did not say|didn't say|not confirmed)\b",
+    r"\b(?:if|unless|whether|might|may|possibly|unclear|unknown|unconfirmed|never said"
+    r"|did not say|didn['’]t say|does not say|doesn['’]t say|not confirmed)\b",
     re.IGNORECASE,
 )
 _NUMERIC_WORD = re.compile(
@@ -44,7 +47,7 @@ _RECIPIENT = r"\b(?:send|address(?:ed)?|go(?:es)?|greet)\b[^.!?;]{0,70}\bto\b"
 
 # Recognise source text only. Issue #5 owns parsing, units and financial equivalence.
 _HEDGE = r"(?:(?:about|roughly|approximately|around|call\s+it|circa)\s+)?"
-_DIGITS = r"\d+(?:[.,]\d+)*"
+_DIGITS = r"(?:\d{1,3}(?:[ \u00a0\u202f]+\d{3})+(?:[.,]\d+)?|\d+(?:[.,]\d+)*)"
 _SPOKEN_WORD = (
     r"(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve"
     r"|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|and|a|half)"
@@ -52,6 +55,19 @@ _SPOKEN_WORD = (
 _SPOKEN = rf"{_SPOKEN_WORD}(?:[\s-]+{_SPOKEN_WORD}){{0,7}}"
 _SCALE = r"(?:billion|million|thousand)"
 _CURRENCY_PREFIX = r"(?:USD|ZAR|GBP|EUR|R|[$£€])"
+_AMOUNT_CURRENCY = re.compile(rf"^{_HEDGE}({_CURRENCY_PREFIX})\s*(?=\d)", re.IGNORECASE)
+_CAPITAL_NUMBER = re.compile(
+    rf"^{_HEDGE}(?P<currency>{_CURRENCY_PREFIX})?\s*"
+    r"(?P<number>(?:\d{1,3}(?:,\d{3})+|\d{1,3}(?:[ \u00a0\u202f]+\d{3})+|\d+)(?:\.\d+)?)"
+    r"\s*(?P<scale>thousand|million|billion|[kmb])?$",
+    re.IGNORECASE,
+)
+_SCALE_POWER = {"k": 3, "thousand": 3, "m": 6, "million": 6, "b": 9, "billion": 9}
+_VAGUE_CAPITAL = re.compile(
+    r"\b(?:a few|some|several)\s+(?:hundred|thousand|million|billion)\b"
+    r"|\b(?:amount|capital|figure)\s+(?:is\s+)?(?:unknown|undecided|unconfirmed|not yet set)\b",
+    re.IGNORECASE,
+)
 _MONEY_UNIT = r"(?:rand|dollars|pounds|euros)"
 _PERCENT = r"(?:%|percent|per\s+cent)"
 _MONTH = r"(?:a|per|each)\s+month|monthly"
@@ -71,6 +87,10 @@ _QUOTED_EXPRESSIONS = {
     "adviser_fee": rf"{_HEDGE}(?:{_RATE})",
     "target_return": rf"{_HEDGE}(?:{_RETURN})",
 }
+_DURATION_UNIT = re.compile(
+    r"\b(?:years?|yrs?|months?|mos?|weeks?|wks?|days?|hours?|hrs?|decades?)\b", re.IGNORECASE
+)
+_DURATION_SUFFIX = re.compile(rf"^[\s+-]+{_DURATION_UNIT.pattern}", re.IGNORECASE)
 _OTHER_FEE = re.compile(
     r"\b(?:management|platform|performance|admin(?:istration)?)\s+fee\b", re.IGNORECASE
 )
@@ -85,19 +105,70 @@ def _pattern(excerpt: str, *, currency: bool = False) -> str:
         return r"(?!)"
     start = r"(?<!\w)" if canonical[0].isalnum() else ""
     end = r"(?!\w)" if canonical[-1].isalnum() else ""
-    if currency and canonical == "R":
+    if currency and re.fullmatch(_CURRENCY_PREFIX, canonical, re.IGNORECASE):
         end = r"(?:(?!\w)|(?=\d))"
     if canonical[0].isdigit():
         start += r"(?<!\d[.,])"
     if canonical[-1].isdigit():
-        end += r"(?![.,]\d)"
+        end += r"(?![.,]\d|[ \u00a0\u202f]+\d{3}\b)"
     body = "".join(_EQUIVALENTS.get(char, re.escape(char)) for char in canonical)
-    return start + body + end
+    return "(?i)" + start + body + end
 
 
 def source_quote(notes: str, quote: str | None) -> str | None:
     match = re.search(_pattern(quote or ""), notes)
+    if match:
+        return match.group()
+    # Only tolerate changed terminal punctuation, preserving decimals and internal punctuation.
+    trimmed = (quote or "").strip().rstrip(".,;!?")
+    if trimmed and trimmed != (quote or "").strip():
+        match = re.search(_pattern(trimmed) + r"[.,;!?]?", notes)
     return match.group() if match else None
+
+
+def amount_currency_prefix(amount: str) -> str | None:
+    match = _AMOUNT_CURRENCY.match(amount)
+    return match.group(1) if match else None
+
+
+def equivalent_capital(proposed: str, source: str) -> bool:
+    """Compare bounded digit forms without converting currency or returning a new value."""
+    left = _CAPITAL_NUMBER.fullmatch(proposed.strip())
+    right = _CAPITAL_NUMBER.fullmatch(source.strip())
+    if not left or not right:
+        return False
+    left_currency, right_currency = left["currency"], right["currency"]
+    if left_currency and (
+        not right_currency or left_currency.casefold() != right_currency.casefold()
+    ):
+        return False
+
+    def magnitude(match: re.Match[str]) -> Decimal | None:
+        number = re.sub(r"[, \u00a0\u202f]", "", match["number"])
+        if len(number) > 18:
+            return None
+        return Decimal(number).scaleb(_SCALE_POWER.get((match["scale"] or "").lower(), 0))
+
+    expected = magnitude(right)
+    return expected is not None and magnitude(left) == expected
+
+
+def vague_capital(notes: str, quote: str, value: str | bool | None) -> bool:
+    if not _VAGUE_CAPITAL.search(quote):
+        return False
+    if value is not None and (not isinstance(value, str) or not source_quote(quote, value)):
+        return False
+    matches = list(re.finditer(_pattern(quote), notes))
+    if len(matches) != 1:
+        return False
+    match = matches[0]
+    clause = _local_clause(notes, match.start(), match.end())
+    return bool(
+        re.search(
+            _FINANCIAL_CUES["investment_amount"] + r"|\b(?:amount|capital)\b", clause, re.IGNORECASE
+        )
+        and not _META_INSTRUCTIONS.search(clause)
+    )
 
 
 def _local_clause(notes: str, start: int, end: int) -> str:
@@ -126,31 +197,47 @@ def _nearest_cue(clause: str, value: str) -> set[str]:
     return {field for distance, field in cues if distance == nearest and distance <= 65}
 
 
+def has_duration_unit(value: str) -> bool:
+    return bool(_DURATION_UNIT.search(value))
+
+
+def _is_money_span(value: str, notes: str, end: int) -> bool:
+    return bool(
+        re.fullmatch(_QUOTED_EXPRESSIONS["investment_amount"], value, re.IGNORECASE)
+        and not _DURATION_SUFFIX.match(notes[end:])
+    )
+
+
 def financial_source(
     notes: str,
     field: str,
     value: str,
-    quote: str | None,
-    *,
-    allow_recovery: bool,
+    quote: str,
 ) -> tuple[str, str] | None:
     """Recover source-form value and evidence without converting or calculating a number."""
-    if field == "currency" and not re.fullmatch(
-        r"[A-Z]{3}|R|\$|£|€|rand|rands|dollars|pounds|euros", value
+    if field == "currency" and not (
+        re.fullmatch(r"[A-Z]{3}", value)
+        or re.fullmatch(rf"{_CURRENCY_PREFIX}|rands?|dollars|pounds|euros", value, re.IGNORECASE)
     ):
         return None
     if field != "currency" and (not _NUMERIC_WORD.search(value) or _VAGUE_NUMBER.search(value)):
         return None
+    if field == "investment_amount" and not re.fullmatch(
+        _QUOTED_EXPRESSIONS["investment_amount"], value, re.IGNORECASE
+    ):
+        return None
     pattern = _pattern(value, currency=field == "currency")
-    quoted_value = re.search(pattern, quote or "")
-    if quoted_value and quote:
+    quoted_value = re.search(pattern, quote)
+    if quoted_value:
         # Only contextualise a quote that is itself uniquely located.
         locations = list(re.finditer(_pattern(quote), notes))
         if len(locations) == 1:
             start = locations[0].start() + quoted_value.start()
             end = start + len(quoted_value.group())
             clause = _local_clause(notes, start, end)
-            if not _META_INSTRUCTIONS.search(clause):
+            if not _META_INSTRUCTIONS.search(clause) and (
+                field != "investment_amount" or _is_money_span(quoted_value.group(), notes, end)
+            ):
                 if field == "currency":
                     return quoted_value.group(), quote
                 if _nearest_cue(clause, quoted_value.group()) == {field}:
@@ -158,18 +245,6 @@ def financial_source(
                         quote if _nearest_cue(quote, quoted_value.group()) == {field} else clause
                     )
                     return quoted_value.group(), evidence
-    if not allow_recovery:
-        return None
-
-    occurrences = list(re.finditer(pattern, notes))
-    if len(occurrences) != 1:
-        return None
-    match = occurrences[0]
-    clause = _local_clause(notes, match.start(), match.end())
-    if _META_INSTRUCTIONS.search(clause):
-        return None
-    if field == "currency" or _nearest_cue(clause, match.group()) == {field}:
-        return match.group(), clause
     return None
 
 
@@ -184,10 +259,13 @@ def quoted_financial_expressions(
     if len(locations) != 1:
         return []
     results: list[str] = []
-    for match in re.finditer(rf"(?<![\w+\-])(?:{expression})(?!\w|[.,]\d)", quote, re.IGNORECASE):
+    boundary = r"(?!\w|[.,]\d|[ \u00a0\u202f]+\d{3}\b)"
+    for match in re.finditer(rf"(?<![\w+\-])(?:{expression}){boundary}", quote, re.IGNORECASE):
         start, end = locations[0].start() + match.start(), locations[0].start() + match.end()
         clause = _local_clause(notes, start, end)
         value = match.group()
+        if field == "investment_amount" and not _is_money_span(value, notes, end):
+            continue
         if _META_INSTRUCTIONS.search(clause) or _AMBIGUOUS_CHOICE.search(clause):
             continue
         if field == "adviser_fee" and _OTHER_FEE.search(clause):

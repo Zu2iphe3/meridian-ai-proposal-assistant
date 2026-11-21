@@ -16,3 +16,6 @@
 | D13 | No DB, no Kafka/Airflow/dbt/MLflow, no deployment | Not needed for this problem | Accepted |
 | D14 | Private GitHub repo; ask owner about redistributing the HTML | Brief gives no licence terms | Private visibility confirmed on original repo; sharing permission open |
 | D15 | Match exact financial text first. If a verified quote has one expression with a clear role, copy it verbatim. Keep ambiguous evidence unresolved. | Retain traceable notes when the model reformats a value. Numerical equivalence, conversion and independent validation belong to Issue #5. | Accepted |
+
+| D16 | Use one local extraction call with field, value, quote and optional reason. Derive status in Python. Only eight core fields may be accepted. | Keep source alignment and PM suggestions separate. Exact financial grounding takes priority. Capital reformats require bounded magnitude and currency equivalence before returning the source expression. Supersedes D15 recovery of different figures. | Proposed |
+| D17 | Use local Qwen 2.5 3B with a 180-second deadline, overridable through the process environment. | Freeze a single configuration for acceptance checks and retain a manual review path for partial extraction. | Proposed |

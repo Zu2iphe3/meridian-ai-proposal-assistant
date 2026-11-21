@@ -42,12 +42,12 @@ class OllamaProvider:
     @classmethod
     def from_environment(cls) -> "OllamaProvider":
         try:
-            timeout = float(os.getenv("OLLAMA_TIMEOUT_SECONDS", "90"))
+            timeout = float(os.getenv("OLLAMA_TIMEOUT_SECONDS", "180"))
         except ValueError:
             timeout = 0
         return cls(
             os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434"),
-            os.getenv("OLLAMA_MODEL", "llama3.2:3b"),
+            os.getenv("OLLAMA_MODEL", "qwen2.5:3b"),
             timeout,
         )
 
