@@ -1,0 +1,28 @@
+{
+  "clientName": "The Sithole Family Trust",
+  "introGreetTo": "advisor",
+  "financialPlanner": "Marcus Reid",
+  "applyModel": "global-growth",
+  "needs": "The trustees of the Sithole Family Trust wish to invest USD 1.2 million offshore in a pure global equity mandate with no local exposure. No income is required; all returns are reinvested for the benefit of the next generation. The trust has an aggressive risk appetite and a horizon of ten years or more. Performance is to be measured against a global equity index.\n\n[TO CONFIRM: the specific global equity benchmark index; mandate type (e.g. discretionary).]",
+  "goalAssessment": {
+    "clientType": "Trust",
+    "currency": "USD"
+  },
+  "strategy": {
+    "keyFigures": {
+      "totalInvestment": "1200000"
+    }
+  },
+  "objective": {
+    "riskProfileCategory": "Aggressive",
+    "investmentHorizon": "5 years+",
+    "riskProfile": "Aggressive. The trust seeks maximum long-term capital growth and is comfortable with significant short-term volatility given its ten-year-plus horizon and reinvestment of all returns."
+  },
+  "fees": {
+    "advisorFee": "0.50"
+  },
+  "replacements": {
+    "isReplacement": true,
+    "details": "This proposal replaces an existing offshore unit-trust portfolio that the trust is unwinding."
+  }
+}

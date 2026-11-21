@@ -1,0 +1,24 @@
+{
+  "clientName": "Johannes Coetzee",
+  "introGreetTo": "client",
+  "applyModel": "balanced",
+  "needs": "Johannes and Retha Coetzee (a joint investment, held under Johannes Coetzee) are both around fifty and still working. No income is required at this stage — this is growth capital of approximately R4.5 million. They are experienced investors comfortable with a moderate-to-aggressive risk profile, with a long horizon of ten years or more before drawdown. They want a meaningful offshore allocation given concerns about rand depreciation.",
+  "goalAssessment": {
+    "clientType": "Individual",
+    "currency": "ZAR"
+  },
+  "strategy": {
+    "keyFigures": {
+      "totalInvestment": "4500000"
+    }
+  },
+  "objective": {
+    "targetReturn": "CPI + 5%",
+    "riskProfileCategory": "Moderately Aggressive",
+    "investmentHorizon": "5 years+",
+    "riskProfile": "Moderate-to-aggressive. Experienced investors comfortable with short-term volatility in pursuit of inflation-beating growth over a ten-year-plus horizon, with a meaningful offshore allocation to hedge rand risk."
+  },
+  "fees": {
+    "advisorFee": "0.75"
+  }
+}

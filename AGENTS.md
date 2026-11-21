@@ -1,0 +1,9 @@
+# Engineering instructions
+
+Use the updated Meridian challenge pack in `challenge/` as the assessment source of truth. Use fictional data only. Read the architecture, integration notes, runtime policy and BOK before changing the workflow.
+
+Keep the vanilla HTML/CSS/JS interface, same-origin generator iframe, FastAPI backend, Pydantic extraction, Ollama provider adapter, deterministic verification, provenance and proposal mapper. The portfolio manager reviews and approves the proposal before one call to the public `loadProposal()` API. Preserve the vendor HTML byte for byte. Require source evidence for figures, preserve uncertainty, flag gaps and never overwrite adviser corrections. Runtime rules live in `docs/agent-policy.md`. Record justified architectural or dependency changes in the BOK. Avoid unrelated edits and unnecessary infrastructure.
+
+This is a personal project under `Zu2iphe3`. Use only the approved personal GitHub account and repository-local name and personal or GitHub noreply email. Verify the account, remotes, local and effective identity, and working-tree status before writes. Stop if identity is unset or differs from the approved values. Never use employer accounts, email, credentials, repositories, code or data. Never change global Git configuration.
+
+Work on one issue per focused branch. Before each commit, push, PR creation, merge, repository settings change or history rewrite, show the relevant status, diff or checks and obtain separate explicit approval. Link PRs to issues. Use conventional commits describing actual changes. Prefer readable code and comments that explain non-obvious decisions. Run relevant tests, lint and type checks before requesting review, report what actually ran, and update the BOK with verified progress and important decisions.
