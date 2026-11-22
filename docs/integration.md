@@ -44,7 +44,40 @@ The review step shows accepted text and original evidence, clearly marks
 approximation, and lists missing or conflicting core facts for correction.
 Unresolved values stay blank in the mapped draft.
 
-Issue #5 can test normalized amounts and conflicts using deterministic source
-notes and saved candidates. Issue #6 can use mocked reviewed data to test
-the mapper, approval gate and exactly one generator draft per approval.
-These tests can run offline independently of the live provider benchmark.
+`POST /api/extract` adds a `financial_verification` result alongside extraction
+fields and diagnostics. The verifier supplies decimal strings, exact source
+expressions and character offsets, source frequency, and evidence dispositions. PM review uses `financial_verification.fields` as the authoritative financial
+ledger. The sibling `excluded_evidence` lists expressions classified outside
+the proposal, such as a reserve or other fees. Keep competing and potentially
+superseded figures visible. For an unsettled field, an evidence disposition
+of `current` means the expression remains in consideration. It confers no
+approval. The top-level Issue #4 fields retain the model's diagnostics.
+Use the top-level `client_name` as the accepted name. A recovered name is
+accepted only when an explicit source label supports the proposed identity.
+Client-name entries in `review_candidates` retain the original quote and
+diagnostic. Ask the PM to confirm only entries marked `provisional`.
+
+
+For `pm_confirm_source_backed_proposal`, display the evidence first. Where
+the first evidence entry matches the source-backed extraction candidate,
+show that proposal with its exact quote. Keep the selected mapping value
+blank until the PM confirms it. If the extraction returned no source-backed
+value, show the alternatives and ask for the figure directly.
+If a rejected quote can be replaced with one unique literal source span,
+show that span and the rejection reason for PM review. The recovered literal
+does not verify the model's semantic interpretation. Grounded risk labels
+tolerate surface formatting, and grounded duration ranges map only when
+both exact endpoints share the same supported horizon bucket.
+
+For Issue #6, `financial_verification.mapping_candidates` is the only
+source of automatic financial inputs to the mapper. Apply PM edits
+and approval before building any proposal. Never populate a proposal from
+the ledger's evidence, raw candidates, unresolved fields or excluded figures.
+Capital requires an integer amount and supported currency. Only verified
+monthly income with compatible currency is included. A verified quarterly
+or annual amount remains in the review ledger. A verified magnitude with
+unresolved currency also remains available for review.
+
+Issue #6 can use mocked reviewed data to test the mapper, approval gate and
+exactly one generator draft per approval. These tests can run offline
+independently of the live provider benchmark.
