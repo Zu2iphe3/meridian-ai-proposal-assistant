@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict
 from meridian_agent.extraction import ExtractionError, ExtractionProvider, ExtractionResult, extract
 from meridian_agent.financial_verification import FinancialVerification, verify_financials
 from meridian_agent.ollama import OllamaProvider
+from meridian_agent.proposal_mapping import ApprovedProposal, MappedProposal, map_reviewed
 
 app = FastAPI()
 MAX_NOTES_LENGTH = 4000
@@ -55,6 +56,11 @@ async def extract_notes(
         )
     except ExtractionError as exc:
         raise HTTPException(exc.status, detail={"code": exc.code, "message": str(exc)}) from exc
+
+
+@app.post("/api/proposals/map", response_model_exclude_none=True)
+def map_proposal(request: ApprovedProposal) -> MappedProposal:
+    return map_reviewed(request.review)
 
 
 app.mount("/web", StaticFiles(directory=Path(__file__).resolve().parents[2] / "web"), name="web")

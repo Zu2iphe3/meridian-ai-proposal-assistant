@@ -31,7 +31,7 @@ response alone does not authorize loading a draft.
 |---|---|
 | Client | `clientName` |
 | Investment capital | Verified, normalized digit string at `strategy.keyFigures.totalInvestment` |
-| Currency | Supported code at `goalAssessment.currency` after verification and PM confirmation if ambiguous |
+| Currency | Reviewed code at both `goalAssessment.currency` and `strategy.currency` for the summary and displayed figures |
 | Horizon and risk | `objective.investmentHorizon` and `objective.riskProfileCategory` using supported dropdown options |
 | Income need | Review context only. An independently verified monthly amount maps to `strategy.keyFigures.incomeValue` |
 | Portfolio preference | After PM selection, map to a discovered `applyModel` ID or validated `strategy.allocation` |
@@ -78,6 +78,32 @@ monthly income with compatible currency is included. A verified quarterly
 or annual amount remains in the review ledger. A verified magnitude with
 unresolved currency also remains available for review.
 
-Issue #6 can use mocked reviewed data to test the mapper, approval gate and
-exactly one generator draft per approval. These tests can run offline
-independently of the live provider benchmark.
+## Mapper and approval handoff
+
+`web/proposal-handoff.js` exposes `reviewFromExtraction()`,
+`listGeneratorModels()`, and `createProposalHandoff(iframe)`. Keep the
+original extraction response beside the editable review so quotes,
+uncertainty and provenance remain visible. User corrections replace the
+reviewed values and must pass the same validation as automatic candidates.
+
+Call `setReview(values)` when the review changes. On explicit PM approval,
+call `approve()`, then pass its token to `createDraft(token)`. The handoff
+maps that snapshot through `POST /api/proposals/map`, checks that the selected
+model is still available, and makes one vendor call. Duplicate activation
+shares the same result. An edit invalidates any pending approval. An error
+after invoking the vendor does not retry automatically because a draft may
+already exist.
+
+The mapper emits the supported subset of `challenge/schema.json`. It keeps
+capital and income currency attached to their reviewed values, maps only
+monthly income, and retains approximation in `needs`. Applying a model
+requires reviewed currency, risk and horizon so the vendor presets cannot
+fill those gaps silently. The PM can leave the model unselected and still
+create a draft. The mapping response labels the groups supplied by model or
+practice settings separately. The public model list exposes names and IDs,
+so exact defaults are visible in the generator after handoff. The vendor can
+display a configured practice fee for an omitted fee field.
+
+The approval gate governs this application handoff. The vendor retains its
+independent editor. Issues #7 and #8 connect visible review and approval
+controls to the same contract.
