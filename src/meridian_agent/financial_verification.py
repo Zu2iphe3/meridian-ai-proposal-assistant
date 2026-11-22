@@ -198,14 +198,18 @@ _DRAW_BEFORE = (
     r"|(?:need|needs|require|requires|withdraw|draw|take|pay out)(?:\s+to\s+(?:take|draw|withdraw))?)"
     r"[\s:]*(?:(?:of|is|was|at|the amount of)\s+)*$"
 )
-_DRAW_AFTER = r"^[\s,]*(?:as\s+(?:income|a drawdown)|(?:in|of)\s+(?:monthly\s+)?income|for (?:income|living expenses))\b"
+_DRAW_AFTER = (
+    rf"^[\s,]*(?:as\s+(?:income|a drawdown)|(?:in|of)\s+(?:(?:{_TIME})\s+)?income"
+    r"|for (?:income|living expenses))\b"
+)
+_NEGATIVE_AUXILIARY = r"(?:does not|do not|doesn['’]t|don['’]t|won['’]t|will not)"
 _NO_INCOME = re.compile(
     r"\b(?:no\s+(?:(?:monthly|regular|ongoing)\s+)?(?:income|drawdown|withdrawals?|distributions?|cash)"
     r"\s+(?:(?:will be|is|are|being|to be)\s+)?(?:required|needed|paid(?: out)?|taken)"
     r"|(?:income|drawdown|income withdrawals)\s*:?\s+(?:is\s+|are\s+)?not\s+(?:needed|required)"
     r"|(?:nothing|no cash)\s+(?:is\s+)?to be\s+(?:withdrawn for income|paid out)"
     r"|no need for (?:(?:any|monthly|regular)\s+)*(?:income|withdrawals?|drawdown)"
-    r"|(?:does not|do not|doesn['’]t|don['’]t|won['’]t|will not)\s+(?:need|require)\s+"
+    rf"|{_NEGATIVE_AUXILIARY}\s+(?:need|require)\s+"
     r"(?:(?:a|any|monthly|regular|ongoing)\s+)*(?:income|withdrawals?|drawdown))\b",
     re.IGNORECASE,
 )
@@ -383,6 +387,42 @@ class Expression:
     currency: SourceFinding | None
 
 
+def _income_frequency(
+    clause: str, amount: re.Match[str], competing_figures: bool
+) -> Frequency | None:
+    # Keep cadence inside the amount's own statement, even inside a longer admissible clause.
+    # Commas inside amounts are not boundaries.
+    separators = list(
+        re.finditer(r"(?<!\d),|,(?!\d)|\b(?:and|or|but|while|whereas)\b", clause, re.IGNORECASE)
+    )
+    start = max((item.end() for item in separators if item.end() <= amount.start()), default=0)
+    end = min(
+        (item.start() for item in separators if item.start() >= amount.end()), default=len(clause)
+    )
+    statement = clause[start:end]
+    frequency = _frequency(statement)
+    if (
+        frequency is None
+        or _NEGATED.search(statement)
+        or re.search(rf"\b{_NEGATIVE_AUXILIARY}\b", statement, re.IGNORECASE)
+    ):
+        return None
+    if amount["frequency"]:
+        return frequency
+    before = re.search(_DRAW_BEFORE, clause[start : amount.start()], re.IGNORECASE)
+    after = re.match(_DRAW_AFTER, clause[amount.end() : end], re.IGNORECASE)
+    # A cadence elsewhere in the statement can describe an expense or a contribution.
+    # Require it on the income label unless the amount already carries the cadence.
+    if before and _frequency(before.group()) == frequency:
+        return frequency
+    if not competing_figures and after:
+        following = clause[amount.end() + after.end() : end]
+        adjacent_cadence = re.match(rf"\s+(?:{_TIME})\b", following, re.IGNORECASE)
+        if _frequency(after.group()) == frequency or adjacent_cadence:
+            return frequency
+    return None
+
+
 def _scan(
     clauses: list[tuple[int, str]],
 ) -> tuple[list[Expression], list[SourceFinding], dict[FinancialField, list[SourceFinding]]]:
@@ -391,9 +431,16 @@ def _scan(
     direct: dict[FinancialField, list[SourceFinding]] = {field: [] for field in _FIELDS}
     for offset, clause in clauses:
         uncertain = bool(_CONDITIONAL.search(clause) or _UNCERTAIN.search(clause))
-        for match in _EXPRESSION.finditer(clause):
+        matches = [
+            (match, _attach_currency(offset, clause, match))
+            for match in _EXPRESSION.finditer(clause)
+        ]
+        competing_figures = (
+            sum(bool(currency or match["scale"] or match["percent"]) for match, currency in matches)
+            > 1
+        )
+        for match, currency in matches:
             before, after = clause[: match.start()], clause[match.end() :]
-            currency = _attach_currency(offset, clause, match)
             money = bool(currency or match["scale"])
             rate = bool(match["percent"])
             advice = bool(
@@ -460,6 +507,7 @@ def _scan(
                 )
             ):
                 role = "income_amount"
+                finding.frequency = _income_frequency(clause, match, competing_figures)
                 direct["income_requirement"].append(
                     finding.model_copy(update={"value": "required"})
                 )
@@ -637,6 +685,15 @@ def _evidence_key(
     )
 
 
+def _cadence_only(value: str) -> bool:
+    frequency = _frequency(value)
+    if frequency is None:
+        return False
+    cadence = dict(_FREQUENCIES)[frequency]
+    remainder = cadence.sub("", value).strip()
+    return not remainder or bool(re.fullmatch(_DRAW_BEFORE, remainder, re.IGNORECASE))
+
+
 def _resolve(
     field: FinancialField,
     notes: str,
@@ -656,6 +713,23 @@ def _resolve(
     proposed: list[SourceFinding] = []
     review: list[SourceFinding] = []
     for proposal, (start, end) in anchored:
+        if (
+            field == "income_requirement"
+            and not proposal.eligible
+            and proposal.value
+            and _cadence_only(proposal.value)
+            and any(
+                item.value == "required"
+                and item.frequency is not None
+                and item.uncertainty != "unresolved"
+                and item.quote_start <= start < item.quote_start + len(item.quote)
+                and not notes[item.quote_start + len(item.quote) : end].strip(" \t\r\n.!?;")
+                for item in direct
+            )
+        ):
+            # A cadence in the wrong model field is diagnostic, not an opposing income statement.
+            # The independently grounded amount and cadence still go through conflict resolution.
+            continue
         matched = [
             item
             for item in [*direct, *(item.evidence for item in compatible)]

@@ -1,11 +1,7 @@
 import json
-import socket
-from collections.abc import Iterator
 from pathlib import Path
-from threading import Thread
 
 import pytest
-import uvicorn
 from playwright.sync_api import Page, expect
 
 from meridian_agent.app import app, get_extraction_provider
@@ -13,21 +9,6 @@ from meridian_agent.app import app, get_extraction_provider
 pytestmark = pytest.mark.browser
 ROOT = Path(__file__).resolve().parents[2]
 GENERATOR = "/web/vendor/challenge-generator.html"
-
-
-@pytest.fixture(scope="module")
-def app_url() -> Iterator[str]:
-    with socket.create_server(("127.0.0.1", 0)) as listener:
-        server = uvicorn.Server(
-            uvicorn.Config(app, log_level="warning", timeout_graceful_shutdown=5)
-        )
-        worker = Thread(target=server.run, kwargs={"sockets": [listener]}, daemon=True)
-        worker.start()
-        try:
-            yield f"http://127.0.0.1:{listener.getsockname()[1]}"
-        finally:
-            server.should_exit = True
-            worker.join(timeout=10)
 
 
 @pytest.fixture
