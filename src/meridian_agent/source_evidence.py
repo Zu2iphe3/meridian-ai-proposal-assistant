@@ -1,12 +1,42 @@
 """Locate exact source excerpts and check simple field attribution."""
 
 import re
+from collections.abc import Iterator
 from decimal import Decimal
 from typing import Literal
 
 _QUOTES = str.maketrans({"“": '"', "”": '"', "‘": "'", "’": "'"})
 _EQUIVALENTS = {" ": r"\s+", '"': '["“”]', "'": "['‘’]"}
 _CLAUSE_END = re.compile(r"[.!?](?=\s|$)|;|\n\s*\n")
+_SPLIT = re.compile(
+    r";|\r?\n[ \t]*\r?\n|\r?\n(?=[ \t]*[A-Za-z][A-Za-z ]{0,32}:)|[!?](?=\s|$)|(?<!\.)\.(?=\s|$)(?!\s*\.)"
+)
+_EXTERNAL = re.compile(
+    r"\b(?:pasted|copied|unrelated|external|example|sample|hypothetical|illustrative|template)\b"
+    r"|\b(?:ignore|disregard|override|forget)\b"
+    r"|\b(?:system prompt|extraction policy|instructions?|do not report|assistant should)\b"
+    r"|</?(?:system|assistant|user)\b|\[(?:/?INST|/?SYS)\]|^[ \t]*>",
+    re.IGNORECASE,
+)
+_COMMAND = re.compile(
+    r"(?:^|[:,])\s*['\"“‘]?(?:(?:please|then|now)\s+)?"
+    r"(?:set|report|return|output|mark|pretend|insert|fabricate|enter|display|print|"
+    r"record|use|write|state|treat|replace|choose|fill)\b"
+    r"[^.!?;]{0,38}\b(?:capital|investment amount|advis[eo]r fee|currency|income)\b"
+    r"|\b(?:tell|force|ask)\s+(?:the\s+)?(?:model|assistant|system)\b",
+    re.IGNORECASE,
+)
+_IDENTITY_COMMAND = re.compile(
+    r"(?:^|[:,])\s*[\"'“‘]?(?:please\s+)?(?:set|report|output|mark|fabricate|enter|"
+    r"record|say|return|pretend|write|use|choose|insert|replace)\b[^.!?;]{0,35}"
+    r"\b(?:client name|client identity|as (?:the )?client)\b",
+    re.IGNORECASE,
+)
+_IDENTITY_EXTERNAL = re.compile(
+    r"""^["'“‘]?(?:pasted|copied|external)\s+(?:message|instructions?|text)\s*:|"""
+    r"</?(?:system|assistant|user)\b|\[(?:/?INST|/?SYS)\]|^>",
+    re.IGNORECASE,
+)
 _FINANCIAL_CUES = {
     "investment_amount": r"\b(?:lump sum|invest(?:ment|ing)?|put in|investment capital)\b",
     "monthly_income": r"\b(?:income|drawdown|draw down|per month|a month|monthly)\b",
@@ -124,6 +154,51 @@ def source_quote(notes: str, quote: str | None) -> str | None:
     if trimmed and trimmed != (quote or "").strip():
         match = re.search(_pattern(trimmed) + r"[.,;!?]?", notes)
     return match.group() if match else None
+
+
+def admissible_clauses(notes: str, *, identity: bool = False) -> Iterator[tuple[int, str]]:
+    start = 0
+    external_block = False
+    external, command = (
+        (_IDENTITY_EXTERNAL, _IDENTITY_COMMAND) if identity else (_EXTERNAL, _COMMAND)
+    )
+    # An explicitly imported block remains untrusted until a paragraph boundary.
+    for delimiter in (*_SPLIT.finditer(notes), None):
+        end = delimiter.start() if delimiter else len(notes)
+        clause = notes[start:end].strip()
+        if clause:
+            if external.search(clause) or (identity and _META_INSTRUCTIONS.search(clause)):
+                external_block = True
+            if not external_block and not command.search(clause):
+                yield start + len(notes[start:end]) - len(notes[start:end].lstrip()), clause
+        if delimiter and delimiter.group().count("\n") == 2:
+            external_block = False
+        start = delimiter.end() if delimiter else len(notes)
+
+
+def admissible_anchor(
+    notes: str, quote: str, safe_clauses: list[tuple[int, str]], *, unique: bool = True
+) -> tuple[int, int] | None:
+    located = source_quote(notes, quote)
+    if located is None:
+        return None
+    start = notes.index(located)
+    end = start + len(located)
+    if unique and source_quote(notes[end:], quote) is not None:
+        return None
+    # A multi-sentence quote may include punctuation removed by the scan.
+    # Every substantive character must be in a trusted source segment.
+    cursor = start
+    for offset, clause in safe_clauses:
+        right = offset + len(clause)
+        if right <= cursor or offset >= end:
+            continue
+        if notes[cursor:offset].strip(" \t\r\n.!?;"):
+            return None
+        cursor = max(cursor, right)
+        if cursor >= end:
+            return start, end
+    return (start, end) if not notes[cursor:end].strip(" \t\r\n.!?;") else None
 
 
 def amount_currency_prefix(amount: str) -> str | None:

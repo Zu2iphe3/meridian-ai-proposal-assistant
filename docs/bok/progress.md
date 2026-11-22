@@ -65,7 +65,7 @@ The complete local suite passed 43 tests, including Chromium and the focused reg
 
 The updated challenge requires a working demo, runnable code with a README and a short engineering write-up. Model choice and handling of ambiguous portfolio labels require validation. Ask the portfolio manager to confirm unclear labels. Confirm permission before sharing the supplied generator and review the outstanding questionnaire before submission.
 
-The proposed Issue #4 revision uses one Qwen 2.5 3B call and a minimal
+The merged Issue #4 revision uses one Qwen 2.5 3B call and a minimal
 field/value/quote/reason contract. Python derives status, limits acceptance to
 eight core fields, and retains noncore proposals for review. A single live
 smoke recovered 22/24 facts, including Sarah's approximate amount. The subsequent
@@ -73,14 +73,14 @@ post-tuning pass recovered 56/84 facts from the previously seen locked pack,
 with zero incorrect accepted values or timeouts. The median was 40.86 seconds
 and p95 was 58.63 seconds. H12 accepted no fields, because the model cited the
 planted instruction as evidence even for genuine values. The pack remains below
-the agreed coverage and latency targets. Issue #4 is open for review. Follow-up
+the agreed coverage and latency targets. Issue #4 closed when PR #16 merged. Follow-up
 verification and mapper tests can use deterministic fixtures independently of
 live inference.
 
 ### Independent manual Swagger checks
 
 The portfolio manager independently tested four fictional notes through Swagger
-using the proposed Qwen 2.5 3B implementation. These user-reported results are
+using the Qwen 2.5 3B implementation now on main. These user-reported results are
 separate from the locked benchmark and the developer smoke run.
 
 | Manual case | Correct / determinate | Observation |
@@ -95,10 +95,172 @@ Explicit income or no-income wording, equivalent adviser fee forms and
 paraphrased quotes can still cause correct proposals to be withheld. Competing
 fees stayed blank in case 4, but no structured conflict was surfaced.
 
-Issue #5 will scan the entire original note for financial expressions,
-independently of the model's evidence quotes, and reconcile those findings
-with its proposed roles. It will verify equivalent numeric forms and income
-frequency or absence against source context, preserve the original evidence,
-and surface competing figures for PM review. The case with competing adviser
-fees is a required regression. These findings do not change the extraction
-prompt or close Issue #4.
+### Issue #5 financial verification
+
+The extraction endpoint now adds a financial verification result from scanning the
+original notes, including passages the model omitted. It keeps original expressions,
+offsets, uncertainty, periods, and explicitly superseded figures. Ambiguous values,
+unsupported units, currency mismatches and competing figures are review items.
+
+Replaying all 12 saved fictional Qwen responses through a mocked provider gave
+21/40 correct determinate financial facts before verification and 40/40 after.
+The four scored fields were investment amount, currency, adviser fee and income
+requirement. The verifier recovered 19 facts with zero incorrect accepted values
+and zero false rejections in this replay. These notes were previously seen. The
+four original assessment inputs were also tested offline. The unlabelled fee
+unit in sample 04 still requires PM confirmation.
+
+Two fresh fictional notes passed through FastAPI and local Qwen with the
+same model digest, prompt and output schema as Issue #4. Both requests
+returned HTTP 200 in 39.87 s and 28.74 s, with 8/8 determinate financial
+facts and zero incorrect accepted values. The second case kept both
+competing fee quotes and withheld the fee even though the model proposed
+one. An earlier smoke check had missed these quotes because the scanner
+mistook a reference to a record for an instruction. The corrected rule
+has a focused regression test.
+
+Local verification passed 117 offline tests including both Chromium tests.
+Ruff, mypy, actionlint and the patch whitespace and secret scans passed.
+Unmarked text that reads as a client fact still needs PM review. The scanner
+does not establish authenticity, infer absent units, convert currencies, or
+map non-monthly income to the generator's monthly field.
+
+### Issue #5 manual-test correction
+
+Three independent manual Swagger tests exposed a gap in the original scan.
+The verifier could miss capital and corrections, and it verified one fee
+despite source evidence for a competing rate. The ledger now reconciles
+source-grounded uncertainty and conflicts before admitting a result. It retains
+superseded amounts and evidence for excluded roles. Issue #6 must use
+`financial_verification.mapping_candidates` after PM review and approval.
+
+Replay of the supplied request and processed-response captures recovered
+five facts. Correct coverage changed from 6/11 to 11/11, with no false
+rejections. Incorrect accepted values and missed conflicts each changed from
+one to zero. In the fee conflict case, the captured Issue #4 conflicts
+object was empty. The anchored unresolved evidence and the full note still
+blocked both fees. The captures were replayed offline and kept outside Git.
+The saved 12-note benchmark matched the earlier 40/40 at the four scored
+financial fields, with no incorrect accepted values or false rejections.
+
+The frozen verifier and local Qwen returned HTTP 200 for all three fresh
+notes in 30.56 s, 27.72 s and 30.54 s. The prewritten key scored 10/12
+financial facts, up from 4/12 before verification. The verifier recovered
+six facts with no incorrect accepted values, false rejections or missed
+conflicts in this run. It withheld the competing fee Qwen proposed and kept
+both percentages for review. The two misses were income requirement and
+amount in a note that named a quarterly figure without specifying drawdown
+or contribution. No tuning followed this run. The full offline suite passed
+125 tests including both Chromium regressions.
+
+### Issue #5 proposal-led verification
+
+The next three independent Swagger tests exposed the limits of inferring
+financial roles and correction links from wording. The original Test E
+capture shows a grounded USD 325,000 model proposal and an unsafe USD 250,000
+verified output. The revised verifier preserves the model proposal, scans
+for compatible alternatives and leaves both amounts in review with capital
+omitted from mapping. It leaves correction decisions to the PM when the
+existing model contract cannot settle the relationship.
+
+The six exact processed-response replays yielded 19/21 automatically verified
+financial facts, versus 12/21 in the captures. The verifier produced one
+correct numeric PM suggestion, blocked two previously incorrect values,
+and made no incorrect acceptances. Two determinate corrections required PM
+input. The saved 12-note replay verified 39/40 with zero incorrect values
+and surfaced the remaining confirmed amount as a model-backed PM suggestion.
+These fixtures, including the exact captures, remain outside the repository.
+
+Three fresh notes completed a frozen loopback run in 38.95 s, 29.26 s and
+25.35 s. The verifier automatically verified 11/12 determinate facts and
+made no incorrect acceptances. In the remaining case, Qwen proposed the
+correct revised amount with a quote that could not be found. The ledger
+kept both source figures for PM review without promoting either. Another
+case withheld both competing fees. No changes followed the frozen run.
+The offline suite passed 127 tests, including both Chromium regressions.
+
+### Issue #5 final evaluation
+
+Eight development mocks isolated role contamination, quote-grounding
+failures and category formatting. The final pass limits exclusions to
+expressions with explicit source evidence of an unrelated role, preserves
+unique recovered literals as PM review evidence, and normalises supported
+risk formatting and grounded month/year horizons. Bounded ranges are
+eligible only when both endpoints yield the same dropdown bucket.
+
+The original A–H captures were replayed as regressions. G now preserves
+the approximate capital and distinguishes the adviser fee from the
+management charge. H keeps both capital figures and the exact risk term
+in review without treating paraphrased or absent quotes as verified.
+Across all eight captures, 38/42 keyed determinate facts were verified
+automatically, two correct PM suggestions were surfaced, and no incorrect
+values or missed conflicts were observed. The previously seen saved pack
+remained at 39/40 on its four keyed fields. Local checks passed 134 offline
+tests including both Chromium regressions. All benchmark notes and captures
+are fictional and remain outside Git.
+
+The development mocks improved from 25/35 to 32/35 verified facts and
+reduced referrals on determinate facts from eight to two. The four live
+development notes scored 21/22 verified with one correct PM suggestion,
+zero incorrect values, and zero missed conflicts. The locked ten-note
+holdout scored 40/47 verified, two correct PM suggestions, five referrals
+on determinate facts, and two omitted determinate facts. No incorrect
+verified or mapped values and no missed keyed fee conflicts were observed.
+
+On the actual Qwen holdout responses, raw semantic precision was 35/42
+and recall was 35/47. A source quote was located for 41/44 non-null
+proposals, and 35/44 had a source quote and value aligned in an admissible
+passage. All ten requests succeeded, with 32.65 s median and 91.00 s p95
+end-to-end latency and no timeouts. No implementation or answer-key
+changes followed the holdout. The largest remaining gaps are correction
+links, equivalent compound fee expressions, and horizons that the model
+omits or transforms before grounding.
+
+### Client identity grounding follow-up
+
+Issue #5 preserves the original client-name path where the person's role
+is supported. It withholds explicit non-clients, unlabelled generic actors,
+and names sourced only from instruction text. A unique exact occurrence
+can repair a bad quote when its passage establishes the proposed person or
+entity as the client. Otherwise the evidence is provisional. Original
+model quotes and rejection reasons remain visible in review entries.
+
+From 29 saved raw responses, 11 previously correct client names remained
+accepted, two correct names were recovered, two generic role labels were
+withheld, and three names were surfaced for PM confirmation. J stayed
+provisional and K recovered automatically. All 203 other core field
+comparisons and 41 financial payload comparisons matched before and after.
+The 22 focused mocked cases showed no false rejections or incorrect client
+identities. The full offline suite passed 156 tests including Chromium.
+
+### Final client identity simplification
+
+Automatic recovery now requires an explicit client or proposal label.
+The own-capital wording heuristic was removed. J and K both retain exact
+recovered passages for PM confirmation. The identity-specific instruction
+guard uses explicit instruction markers rather than incidental words such
+as “sample” or “instructions”. The financial source filter is unchanged.
+
+The production delta is 49 added and 64 removed lines. All 29 saved raw
+responses preserve the previous client outcomes, and the other seven
+core fields and all 41 financial payloads match. The only changed capture
+is K, which switches from automatically recovered to provisional. The
+full offline suite passed 157 tests. No new model calls were made.
+
+### Independent live Swagger follow-up
+
+The user reported that all three additional fictional Swagger cases passed
+the critical financial mapping checks. All three client names were accepted,
+including one automatic evidence recovery. Revised capital, unknown currency,
+conditional income and competing adviser fees stayed out of unsafe mapping.
+These manual observations are separate from the frozen benchmark.
+
+- Separate emergency savings can trigger unnecessary capital confirmation.
+- A correct revised capital proposal can still require PM confirmation.
+- A tentative investment horizon can lose its uncertainty classification.
+- The numeric scan can retain irrelevant evidence, such as “One” in an
+  adviser fee quotation.
+
+The review workflow must retain the original evidence, let the PM resolve
+uncertainty and confirm or correct tentative fields, and require explicit
+PM approval before the mapper hands a proposal to the generator.

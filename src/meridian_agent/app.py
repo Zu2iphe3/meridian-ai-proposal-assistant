@@ -8,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict
 
 from meridian_agent.extraction import ExtractionError, ExtractionProvider, ExtractionResult, extract
+from meridian_agent.financial_verification import FinancialVerification, verify_financials
 from meridian_agent.ollama import OllamaProvider
 
 app = FastAPI()
@@ -18,6 +19,10 @@ class ExtractionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
     notes: str
+
+
+class VerifiedExtractionResult(ExtractionResult):
+    financial_verification: FinancialVerification
 
 
 def get_extraction_provider() -> OllamaProvider:
@@ -36,14 +41,18 @@ def health() -> dict[str, str]:
 async def extract_notes(
     request: ExtractionRequest,
     provider: Annotated[ExtractionProvider, Depends(get_extraction_provider)],
-) -> ExtractionResult:
+) -> VerifiedExtractionResult:
     if not request.notes.strip() or len(request.notes) > MAX_NOTES_LENGTH:
         raise HTTPException(
             422,
             detail={"code": "invalid_notes", "message": "Provide 1 to 4,000 characters of notes."},
         )
     try:
-        return await extract(request.notes, provider)
+        result = await extract(request.notes, provider)
+        return VerifiedExtractionResult(
+            **result.model_dump(),
+            financial_verification=verify_financials(request.notes, result),
+        )
     except ExtractionError as exc:
         raise HTTPException(exc.status, detail={"code": exc.code, "message": str(exc)}) from exc
 
