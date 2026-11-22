@@ -264,3 +264,12 @@ These manual observations are separate from the frozen benchmark.
 The review workflow must retain the original evidence, let the PM resolve
 uncertainty and confirm or correct tentative fields, and require explicit
 PM approval before the mapper hands a proposal to the generator.
+
+### Issue #6 proposal handoff
+
+The mapper validates approved review values and calls the original generator
+through its public interface. Deterministic Chromium tests cover Sample 01
+from mocked extraction to a saved draft, explicit overrides, unresolved fee
+and quarterly income omission, unknown models, stale approval, and duplicate
+activation. The handoff module is ready for the review controls in Issues #7
+and #8.
