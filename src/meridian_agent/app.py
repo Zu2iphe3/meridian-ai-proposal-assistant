@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException
+from fastapi.responses import PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict
 
@@ -14,6 +15,7 @@ from meridian_agent.proposal_mapping import ApprovedProposal, MappedProposal, ma
 
 app = FastAPI()
 MAX_NOTES_LENGTH = 4000
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 class ExtractionRequest(BaseModel):
@@ -36,6 +38,18 @@ def get_extraction_provider() -> OllamaProvider:
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/", include_in_schema=False)
+def assistant() -> RedirectResponse:
+    return RedirectResponse("/web/index.html")
+
+
+@app.get("/api/examples/meeting-notes", response_class=PlainTextResponse)
+def example_notes() -> str:
+    # Serve the supplied fictional example only, without exposing the challenge directory.
+    sample = PROJECT_ROOT / "challenge" / "sample-inputs" / "01-notes-retiree-income.txt"
+    return sample.read_text(encoding="utf-8")
 
 
 @app.post("/api/extract")
@@ -63,4 +77,4 @@ def map_proposal(request: ApprovedProposal) -> MappedProposal:
     return map_reviewed(request.review)
 
 
-app.mount("/web", StaticFiles(directory=Path(__file__).resolve().parents[2] / "web"), name="web")
+app.mount("/web", StaticFiles(directory=PROJECT_ROOT / "web"), name="web")

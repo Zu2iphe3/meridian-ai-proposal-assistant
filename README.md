@@ -2,7 +2,7 @@
 
 A local-first companion that turns fictional portfolio-manager notes into an evidence-backed draft for review in the supplied Meridian Proposal Generator.
 
-The app serves the original generator and extracts evidence-backed candidates from typed notes. Financial validation, adviser review, proposal mapping and transcription are later milestones.
+The assistant extracts and verifies information from typed notes, then lets the portfolio manager review and correct it before creating an editable draft in the original generator.
 
 The `challenge/` folder contains supplied reference material from the updated assessment pack, including the brief, schema, and fictional sample inputs and outputs.
 
@@ -13,7 +13,7 @@ python -m pip install -e ".[dev]"
 python -m uvicorn meridian_agent.app:app
 ```
 
-Open the generator at `http://127.0.0.1:8000/web/vendor/challenge-generator.html`.
+Start Ollama, then open [the assistant workspace](http://127.0.0.1:8000/). Load the fictional sample or enter meeting notes, review the values and evidence, then confirm and approve the draft.
 
 ## Extract candidates locally
 

@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Meridian AI Proposal Assistant</title>
+  <link rel="stylesheet" href="./assistant.css">
+  <script type="module" src="./assistant.js"></script>
+</head>
+<body>
+  <a class="skip" href="#meeting-notes">Skip to meeting notes</a>
+  <header class="masthead">
+    <div class="wrap masthead-inner">
+      <div class="brand"><span class="brand-mark" aria-hidden="true">M</span><span>Meridian</span></div>
+      <span class="product-name">AI Proposal Assistant</span>
+      <button id="new-case" type="button" class="quiet inverse" hidden>New case</button>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="intro" aria-labelledby="page-title">
+      <h1 id="page-title">Prepare an investment proposal</h1>
+      <p>Turn meeting notes into an evidence-backed review, then open an approved draft in the Meridian generator.</p>
+      <ol class="workflow" aria-label="Proposal workflow">
+        <li aria-current="step"><span>Meeting notes</span></li>
+        <li><span>AI extraction</span></li>
+        <li><span>Review &amp; correct</span></li>
+        <li><span>Approve &amp; generate</span></li>
+      </ol>
+    </section>
+
+    <div class="workspace">
+      <div class="primary-column">
+        <section class="panel notes-panel" aria-labelledby="notes-title">
+          <div class="panel-head">
+            <div>
+              <h2 id="notes-title">Meeting notes</h2>
+              <p id="notes-help">Paste fictional meeting notes, or load the supplied retirement example.</p>
+            </div>
+            <button id="load-sample" type="button" class="quiet">Load fictional sample</button>
+          </div>
+          <form id="notes-form" novalidate>
+            <label class="sr-only" for="meeting-notes">Meeting notes</label>
+            <textarea id="meeting-notes" maxlength="4000" aria-describedby="notes-help note-count extraction-error"
+              placeholder="Client name, capital available, income needs, investment horizon, risk appetite and any agreed fees…"></textarea>
+            <p id="extraction-error" class="notice error" role="alert" hidden></p>
+            <div class="panel-foot">
+              <div class="extraction-meta">
+                <span id="extraction-status" role="status">Ready for notes</span>
+                <span id="note-count">0 / 4,000</span>
+              </div>
+              <button id="extract-button" class="button primary" type="submit"><span class="spinner" aria-hidden="true"></span>Extract proposal details</button>
+            </div>
+          </form>
+        </section>
+
+        <section id="review-panel" class="panel review-panel" aria-labelledby="review-title" hidden>
+          <div class="panel-head">
+            <div>
+              <h2 id="review-title" tabindex="-1">Review &amp; correct</h2>
+              <p>Check each value against its evidence. Edits stay in this case if you extract again.</p>
+            </div>
+          </div>
+          <p id="stale-review" class="notice warning" hidden>Notes changed. Extract again before approving this review.</p>
+          <form id="review-form" novalidate>
+            <div id="review-fields"></div>
+          </form>
+        </section>
+      </div>
+
+      <aside class="side-column" aria-label="Evidence and approval">
+        <section class="panel evidence-panel" aria-labelledby="evidence-title">
+          <div class="panel-head">
+            <div><h2 id="evidence-title" tabindex="-1">Source evidence</h2>
+            <p id="evidence-field" aria-live="polite">Review the original wording for a field.</p></div>
+          </div>
+          <div id="evidence-empty" class="empty">
+            <span class="empty-symbol" aria-hidden="true">“</span>
+            <p>Source passages and figures that need confirmation will appear here after extraction.</p>
+          </div>
+          <div id="evidence-content" hidden>
+            <div id="evidence-quotes"></div>
+            <button id="use-name" type="button" class="quiet" aria-label="Use suggested client name" hidden>Use suggested client name</button>
+            <details id="full-source"><summary>Read original notes</summary><div id="source-text" class="source-text"></div></details>
+          </div>
+        </section>
+
+        <section class="panel approval-panel" aria-labelledby="approval-title">
+          <div class="panel-head">
+            <div><h2 id="approval-title">Draft approval</h2>
+            <p id="approval-hint">Extract and review the notes to enable approval.</p></div>
+          </div>
+          <p class="defaults-note"><span class="badge default">Generator default</span> Practice text and configured fees may appear in the draft.</p>
+          <p id="model-defaults" class="defaults-note" hidden>A selected model adds portfolio, objective and fee presets. Reviewed values take precedence.</p>
+          <label class="confirmation" for="confirm-review">
+            <input type="checkbox" id="confirm-review" disabled>
+            <span>I confirm these reviewed values and any fields left blank.</span>
+          </label>
+          <button id="approve-draft" type="button" class="button primary approve" disabled>Approve &amp; generate draft</button>
+          <p id="handoff-error" class="notice error" role="alert" hidden></p>
+          <p id="handoff-status" class="handoff-status" role="status"></p>
+        </section>
+      </aside>
+    </div>
+
+    <section id="draft-section" class="panel draft-panel" aria-labelledby="draft-title" hidden>
+      <div class="panel-head">
+        <div><h2 id="draft-title" tabindex="-1">Meridian proposal generator</h2>
+        <p id="draft-summary"></p></div>
+      </div>
+      <iframe id="proposal-generator" src="./vendor/challenge-generator.html" title="Meridian investment proposal generator"></iframe>
+    </section>
+  </main>
+  <footer class="wrap footer">Meridian AI Proposal Assistant <span>Review required before draft creation</span></footer>
+</body>
+</html>

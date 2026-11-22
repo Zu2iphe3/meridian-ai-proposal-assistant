@@ -104,6 +104,8 @@ practice settings separately. The public model list exposes names and IDs,
 so exact defaults are visible in the generator after handoff. The vendor can
 display a configured practice fee for an omitted fee field.
 
-The approval gate governs this application handoff. The vendor retains its
-independent editor. Issues #7 and #8 connect visible review and approval
-controls to the same contract.
+The assistant keeps PM edits separate from extraction results so another
+extraction preserves them. Note changes, a new extraction or a field edit
+invalidate approval. Conflicts and provisional evidence remain visible for PM
+review. Only the approved snapshot enters the handoff. The resulting draft
+opens in the vendor's independent editor.

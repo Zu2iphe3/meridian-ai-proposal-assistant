@@ -273,3 +273,16 @@ from mocked extraction to a saved draft, explicit overrides, unresolved fee
 and quarterly income omission, unknown models, stale approval, and duplicate
 activation. The handoff module is ready for the review controls in Issues #7
 and #8.
+
+### Issues #7 and #8 PM workspace
+
+The text workflow connects local extraction and source evidence to PM
+corrections, explicit approval and a single editable draft. Review state is
+held in the page for the current case. The generator retains its own draft
+storage. Chromium tests cover retries, stale responses, mapping failures and
+duplicate approval, including review on a mobile viewport.
+
+The income review distinguishes a source-backed amount with unconfirmed
+frequency from missing income and leaves the monthly field for PM confirmation.
+Verification checks cadence against the amount and its income wording in the
+same source clause. Competing or unsupported schedules stay in PM review.
