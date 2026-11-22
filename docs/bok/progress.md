@@ -286,3 +286,14 @@ The income review distinguishes a source-backed amount with unconfirmed
 frequency from missing income and leaves the monthly field for PM confirmation.
 Verification checks cadence against the amount and its income wording in the
 same source clause. Competing or unsupported schedules stay in PM review.
+
+### Issue #9 clarification questions
+
+Local Qwen questions appear on the affected review fields after extraction.
+The verifier supplies eligible gaps and cadence. Estimates awaiting PM
+confirmation stay outside the approved draft. Manual review remains
+available during generation and on timeout.
+
+Two live fictional checks returned within 25–36 seconds. Qwen returned
+incomplete questions for sparse notes and no accepted questions for the
+conflict case. The financial review and approval safeguards worked offline.

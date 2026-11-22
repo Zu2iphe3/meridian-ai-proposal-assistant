@@ -1,6 +1,9 @@
 import { createProposalHandoff, listGeneratorModels, reviewFromExtraction } from "./proposal-handoff.js";
 
+const clarification = { request: null, questions: null, failed: false, deferred: new Set(), held: new Set() };
+
 const byId = id => document.getElementById(id);
+const formatAmount = new Intl.NumberFormat("en-GB");
 const notes = byId("meeting-notes");
 const frame = byId("proposal-generator");
 const confirmReview = byId("confirm-review");
@@ -96,11 +99,14 @@ function buildFields() {
       const warning = element("p", "", "field-warning");
       warning.id = control.id + "-warning";
       warning.hidden = true;
-      control.setAttribute("aria-describedby", warning.id);
       control.addEventListener(def.choices ? "change" : "input", () => recordEdit(def.key, true));
-      row.append(heading, control, meta, warning);
+      const question = element("div", "", "field-clarification");
+      question.id = control.id + "-clarification";
+      question.hidden = true;
+      control.setAttribute("aria-describedby", warning.id + " " + question.id);
+      row.append(heading, control, meta, warning, question);
       grid.append(row);
-      rows.set(def.key, { ...def, control, badge, evidence, approximate, warning });
+      rows.set(def.key, { ...def, control, badge, evidence, approximate, warning, question });
     }
     fieldset.append(grid);
     byId("review-fields").append(fieldset);
@@ -108,12 +114,13 @@ function buildFields() {
 }
 
 function currentValue(key) {
-  return state.edits.has(key) ? state.edits.get(key) : state.automatic[key];
+  if (state.edits.has(key)) return state.edits.get(key);
+  return clarification.held.has(key) ? undefined : state.automatic[key];
 }
 
 function reviewedValues() {
-  const result = { ...state.automatic, ...Object.fromEntries(state.edits) };
-  return Object.fromEntries(Object.entries(result).filter(([, value]) => value !== null));
+  return Object.fromEntries(Array.from(rows.keys(), key => [key, currentValue(key)])
+    .filter(([, value]) => value != null));
 }
 
 function recordEdit(key, reenterAmount) {
@@ -165,6 +172,7 @@ function fieldBadge(row) {
   if (row.key === "model_id") return ["PM selection", state.edits.has(row.key) ? "corrected" : "default"];
   if (state.edits.has(row.key)) return ["PM correction", "corrected"];
   if (row.key === "needs") return ["Optional", ""];
+  if (clarification.held.has(row.key)) return ["Decision pending", "pending"];
   const { legacy, verified, candidates, conflicts } = fieldSource(row);
   if (conflicts.length || verified?.status === "conflict") return ["Conflict", "conflict"];
   if (row.key === "monthly_income" && unconfirmedIncome(verified)) {
@@ -193,6 +201,7 @@ function renderReview(fillControls = true) {
     row.evidence.hidden = row.key === "needs";
   }
   renderEvidence();
+  renderClarifications();
   refreshApproval();
 }
 
@@ -223,6 +232,12 @@ function renderEvidence() {
       verified.status === "conflict" ? "Competing evidence" : "Source passage");
   }
   add(verified?.quote || legacy?.quote, "Source passage");
+  const clarificationItem = clarification.questions?.find(item => item.field === row.key);
+  for (const source of clarificationItem?.evidence || []) {
+    if (!evidence.some(item => item.quote.includes(source.quote))) {
+      add(source.quote, "Clarification context");
+    }
+  }
   for (const item of conflicts) add(item.quote, "Competing evidence");
   for (const item of candidates) add(item.verified_quote,
     item.disposition === "provisional" ? "Provisional suggestion" : "Review evidence");
@@ -245,6 +260,11 @@ function renderEvidence() {
     if (verified?.frequency && verified.frequency !== "monthly") fieldHeading.textContent += " · " + verified.frequency + " figure stays in review";
     for (const item of requirement.evidence) add(item.quote, "Income requirement");
   }
+  // A model quote can contain the same individual passages the verifier found.
+  // Keep the longer passage when both have the same evidence label.
+  const passages = evidence.filter(item => !evidence.some(other =>
+    other !== item && other.label === item.label && other.quote.includes(item.quote)
+  ));
   const quotes = byId("evidence-quotes");
   quotes.replaceChildren();
   if (row.key === "monthly_income" && unconfirmedIncome(verified)) {
@@ -252,13 +272,108 @@ function renderEvidence() {
     const frequency = verified.frequency || "frequency unconfirmed";
     quotes.append(element("p", `Unconfirmed suggestion: ${amount} (${frequency}). Enter a monthly amount only if confirmed.`));
   }
-  if (!evidence.length) quotes.append(element("p", "No verified source quote is available for this field."));
-  for (const item of evidence) {
+  if (!passages.length) quotes.append(element("p", "No verified source quote is available for this field."));
+  for (const item of passages) {
     const quote = element("div", "", "evidence-line");
     quote.append(element("small", item.label), element("blockquote", item.quote));
     quotes.append(quote);
   }
-  showSource(evidence);
+  showSource(passages);
+}
+
+function renderClarifications() {
+  const visible = !!state.extraction && !state.request && notes.value.trim() === state.source;
+  notify("clarifications-status", !visible ? "" : clarification.request
+    ? "Checking for questions. You can continue reviewing."
+    : clarification.failed ? "AI questions are unavailable. Continue with manual review."
+    : "");
+  for (const row of rows.values()) {
+    const item = clarification.questions?.find(question => question.field === row.key);
+    const needsConfirmation = clarification.held.has(row.key);
+    const wasOpen = row.question.querySelector("details")?.open;
+    row.question.replaceChildren();
+    row.question.hidden = !visible || state.edits.has(row.key) || !(item || needsConfirmation);
+    if (row.question.hidden) continue;
+    const suggested = needsConfirmation ? state.automatic[row.key] : undefined;
+    let content = row.question;
+    if (suggested) {
+      const details = element("details");
+      const amount = formatAmount.format(BigInt(suggested.amount));
+      details.open = wasOpen ?? false;
+      details.append(element("summary", `Review proposed ${suggested.currency} ${amount}`));
+      row.question.append(details);
+      content = details;
+    }
+    if (item) content.append(element("p", item.question));
+    if (clarification.deferred.has(row.key)) {
+      content.append(element("small", "Deferred · stays in review"));
+      continue;
+    }
+    const actions = element("div", "", "clarification-actions");
+    if (needsConfirmation) {
+      if (suggested) {
+        content.append(element("small", "This amount is approximate and unconfirmed. Confirm it or enter the agreed amount."));
+        if (suggested.currency === currentValue("currency")) {
+          const confirm = element("button", "Confirm " + row.label.toLowerCase(), "quiet");
+          confirm.type = "button";
+          confirm.addEventListener("click", () => {
+            row.control.value = suggested.amount;
+            row.approximate.checked = suggested.approximate;
+            recordEdit(row.key, true);
+            row.control.focus();
+          });
+          actions.append(confirm);
+        }
+      }
+    } else {
+      content.append(element("small", "Use the review field to record the confirmed answer."));
+    }
+    const defer = element("button", "Defer " + row.label.toLowerCase(), "quiet");
+    defer.type = "button";
+    defer.addEventListener("click", () => {
+      clarification.deferred.add(row.key);
+      renderClarifications();
+      row.control.focus();
+    });
+    actions.append(defer);
+    content.append(actions);
+  }
+}
+
+function cancelClarifications() {
+  clarification.request?.abort();
+  clarification.request = null;
+}
+
+async function askClarifications() {
+  if (clarification.request || clarification.questions !== null || state.request ||
+      !state.extraction || notes.value.trim() !== state.source) return;
+  const controller = new AbortController();
+  clarification.request = controller;
+  clarification.failed = false;
+  renderClarifications();
+  refreshApproval();
+  const { financial_verification, ...extraction } = state.extraction;
+  try {
+    const response = await fetch("/api/clarifications", {
+      method: "POST", headers: { "Content-Type": "application/json" }, signal: controller.signal,
+      body: JSON.stringify({
+        notes: state.source, extraction, financial_verification,
+        pm_fields: [...state.edits.keys()].filter(key => !["needs", "model_id"].includes(key)),
+      }),
+    });
+    if (!response.ok) throw new Error("Clarification unavailable");
+    const data = await response.json();
+    if (clarification.request !== controller) return;
+    clarification.questions = data.questions.filter(item => rows.has(item.field) && !state.edits.has(item.field));
+  } catch {
+    if (clarification.request === controller) clarification.failed = true;
+  } finally {
+    if (clarification.request === controller) {
+      clarification.request = null;
+      renderReview(false);
+    }
+  }
 }
 
 function validationErrors(review) {
@@ -306,7 +421,9 @@ function refreshApproval() {
     : state.draftCreated ? "This approval already created a draft." : "";
   confirmReview.disabled = !!blocker || state.makingDraft;
   approveButton.disabled = confirmReview.disabled || !confirmReview.checked;
-  byId("approval-hint").textContent = blocker || "Confirm the current values, then approve to create one editable draft.";
+  byId("approval-hint").textContent = blocker || (clarification.held.has("investment_amount") &&
+    !state.edits.has("investment_amount") ? "Unconfirmed capital stays out of this draft."
+    : "Confirm the current values, then approve to create one editable draft.");
   const step = state.request ? 1 : state.extraction ? (confirmReview.checked || state.draftCreated ? 3 : 2) : 0;
   for (const [i, item] of Array.from(document.querySelectorAll(".workflow li")).entries()) {
     item.dataset.complete = String(i < step);
@@ -323,6 +440,8 @@ function setBusy(busy) {
 }
 
 function notesChanged() {
+  cancelClarifications();
+  renderClarifications();
   if (state.request) {
     state.request.abort();
     state.request = null;
@@ -348,14 +467,17 @@ async function extractNotes(event) {
     return;
   }
   state.request?.abort();
+  cancelClarifications();
   const id = ++state.requestId;
   const controller = new AbortController();
   state.request = controller;
   invalidateApproval();
   setBusy(true);
+  renderClarifications();
   notify("extraction-error", "");
   byId("extraction-status").textContent = "Extracting with local AI…";
   refreshApproval();
+  let receivedExtraction = false;
   try {
     const response = await fetch("/api/extract", {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -365,9 +487,18 @@ async function extractNotes(event) {
     if (!response.ok) throw new Error(data.detail?.message || "Extraction failed. Check the local service and try again.");
     // Aborting saves work. The request number also protects against late responses.
     if (id !== state.requestId) return;
+    if (state.source !== source) clarification.held.clear();
+    if (state.source !== source || JSON.stringify(state.extraction) !== JSON.stringify(data)) {
+      clarification.questions = null;
+      clarification.failed = false;
+      clarification.deferred.clear();
+    }
     state.extraction = data;
     state.source = source;
     state.automatic = reviewFromExtraction(data);
+    // Keep a source estimate out of approval while Qwen is still checking it.
+    if (state.automatic.investment_amount?.approximate) clarification.held.add("investment_amount");
+    receivedExtraction = true;
     byId("review-panel").hidden = false;
     byId("evidence-empty").hidden = true;
     byId("evidence-content").hidden = false;
@@ -385,7 +516,9 @@ async function extractNotes(event) {
     if (id === state.requestId) {
       state.request = null;
       setBusy(false);
+      renderClarifications();
       refreshApproval();
+      if (receivedExtraction) void askClarifications();
     }
   }
 }
@@ -418,6 +551,10 @@ async function createDraft() {
 }
 
 function resetCase() {
+  clarification.questions = null;
+  clarification.failed = false;
+  clarification.held.clear();
+  clarification.deferred.clear();
   state.extraction = null;
   state.source = "";
   state.automatic = {};

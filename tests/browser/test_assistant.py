@@ -17,6 +17,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SAMPLE = ROOT / "challenge/sample-inputs/01-notes-retiree-income.txt"
 EXTRACT = "**/api/extract"
 MAP = "**/api/proposals/map"
+CLARIFY = "**/api/clarifications"
 
 
 def fixture_response(notes: str, candidates: list[dict]) -> dict:
@@ -50,6 +51,7 @@ def sample_response() -> dict:
 
 @pytest.fixture
 def assistant(page: Page, app_url: str) -> Page:
+    page.route(CLARIFY, lambda route: route.fulfill(json={"questions": []}))
     page.set_viewport_size({"width": 1440, "height": 1080})
     page.goto(app_url)
     expect(page.get_by_role("heading", name="Prepare an investment proposal")).to_be_visible()
@@ -89,6 +91,10 @@ def test_sample_keyboard_review_and_exactly_one_draft(
     expect(submit).to_be_focused()
     submit.press("Enter")
     expect(assistant.get_by_role("heading", name="Review & correct")).to_be_focused()
+    proposed = assistant.get_by_text("Review proposed ZAR 6,200,000", exact=True)
+    proposed.focus()
+    proposed.press("Enter")
+    assistant.get_by_role("button", name="Confirm investment capital").click()
     expect(assistant.get_by_label("Investment capital", exact=True)).to_have_value("6200000")
     expect(assistant.get_by_label("Monthly income", exact=True)).to_have_value("28000")
     expect(assistant.get_by_label("Proposal currency", exact=True)).to_have_value("ZAR")
@@ -102,7 +108,7 @@ def test_sample_keyboard_review_and_exactly_one_draft(
     assistant.get_by_role("button", name="View evidence for Investment capital").click()
     assistant.get_by_text("Read original notes", exact=True).click()
     expect(assistant.locator("#source-text mark")).to_contain_text("R6.2 million")
-    expect(assistant.get_by_text("PM correction", exact=True)).to_have_count(2)
+    expect(assistant.get_by_text("PM correction", exact=True)).to_have_count(3)
     expect(assistant.get_by_text("Generator default", exact=True)).to_be_visible()
     expect(assistant.locator("#model-defaults")).to_be_visible()
     approve = assistant.get_by_role("button", name="Approve & generate draft")
@@ -342,3 +348,217 @@ def test_invalid_edit_revokes_approval_and_handoff_failure_keeps_review(
     expect(assistant.get_by_text("Approved draft created.", exact=True)).to_be_visible()
     assert len(saved_drafts(assistant)) == 1
     assert saved_drafts(assistant)[0]["strategy"]["keyFigures"]["totalInvestment"] == "6290000"
+
+
+@pytest.mark.parametrize(
+    ("defer_capital", "fee_question"), [(False, True), (True, False)], ids=["answer", "defer"]
+)
+def test_clarification_answers_use_review_and_deferral_stays_out_of_draft(
+    assistant: Page, defer_capital: bool, fee_question: bool
+) -> None:
+    notes = (
+        "Client: Olivia Bennett. The client will invest about GBP 300,000. "
+        "Olivia must confirm the final amount. Adviser fee: 0.40%. Adviser fee: 0.70%. "
+        "If the property sells, they require GBP 1,500 each quarter."
+    )
+    payload = fixture_response(notes, [])
+    # Live extraction can supply one broad quote in addition to the individual fee passages.
+    payload["financial_verification"]["fields"]["adviser_fee"]["evidence"].append(
+        {"quote": "Adviser fee: 0.40%. Adviser fee: 0.70%.", "disposition": "current"}
+    )
+    assistant.route(EXTRACT, lambda route: route.fulfill(json=payload))
+    calls = []
+
+    def evidence(quote):
+        return {"id": quote, "quote": quote}
+
+    def clarify(route):
+        calls.append(route.request.post_data_json)
+        route.fulfill(
+            json={
+                "questions": [
+                    {
+                        "field": "investment_amount",
+                        "question": "Is the investment estimate final?",
+                        "pending_decision": True,
+                        "evidence": [evidence("Olivia must confirm the final amount.")],
+                    },
+                ]
+                + (
+                    [
+                        {
+                            "field": "adviser_fee",
+                            "question": "Which fee was agreed?",
+                            "pending_decision": False,
+                            "evidence": [
+                                evidence("Adviser fee: 0.40%."),
+                                evidence("Adviser fee: 0.70%."),
+                            ],
+                        }
+                    ]
+                    if fee_question
+                    else []
+                )
+            }
+        )
+
+    assistant.route(CLARIFY, clarify)
+    enter_notes(assistant, notes)
+    amount = assistant.get_by_label("Investment capital", exact=True)
+    fee = assistant.get_by_label("Annual adviser fee (%)", exact=True)
+    capital_row = assistant.locator(".field").filter(has=amount)
+    fee_row = assistant.locator(".field").filter(has=fee)
+    expect(assistant.get_by_label("Monthly income", exact=True)).to_have_value("")
+    expect(assistant.locator("#clarifications-status")).to_be_hidden()
+    expect(fee).to_have_value("")
+    expect(fee_row.get_by_text("Conflict", exact=True)).to_be_visible()
+    if fee_question:
+        expect(fee_row.get_by_text("Which fee was agreed?", exact=True)).to_be_visible()
+    else:
+        expect(fee_row.locator(".field-clarification")).to_be_hidden()
+    expect(amount).to_have_value("")
+    expect(capital_row.get_by_text("Decision pending", exact=True)).to_be_visible()
+    proposed = capital_row.get_by_text("Review proposed GBP 300,000", exact=True)
+    expect(proposed).to_be_visible()
+    expect(capital_row.get_by_text("Is the investment estimate final?", exact=True)).to_be_hidden()
+    expect(assistant.get_by_role("button", name="Confirm investment capital")).to_be_hidden()
+    proposed.click()
+    expect(capital_row.get_by_text("Is the investment estimate final?", exact=True)).to_be_visible()
+    expect(
+        capital_row.get_by_text("This amount is approximate and unconfirmed.", exact=False)
+    ).to_be_visible()
+    expect(fee_row.locator("blockquote")).to_have_count(0)
+    assistant.get_by_role("button", name="View evidence for Annual adviser fee").click()
+    expect(assistant.locator("#evidence-quotes")).to_contain_text("0.40%")
+    expect(assistant.locator("#evidence-quotes")).to_contain_text("0.70%")
+    expect(assistant.locator("#evidence-quotes blockquote")).to_have_count(1)
+    if defer_capital:
+        assistant.get_by_role("button", name="Defer investment capital").click()
+        expect(assistant.get_by_text("Deferred · stays in review")).to_be_visible()
+    else:
+        assistant.get_by_role("button", name="Confirm investment capital").click()
+        expect(amount).to_be_focused()
+    expected_capital = "" if defer_capital else "300000"
+    expect(amount).to_have_value(expected_capital)
+
+    fee.fill("125")
+    approve = assistant.get_by_role("button", name="Approve & generate draft")
+    expect(approve).to_be_disabled()
+    fee.fill("0.55")
+    assert len(calls) == 1
+    expect(fee_row.get_by_text("PM correction", exact=True)).to_be_visible()
+    expect(fee_row.get_by_text("Which fee was agreed?", exact=True)).to_be_hidden()
+    with assistant.expect_response(lambda response: response.url.endswith("/api/extract")):
+        assistant.get_by_role("button", name="Extract proposal details").click()
+    expect(assistant.locator("#extraction-status")).to_have_text("Review ready")
+    expect(amount).to_have_value(expected_capital)
+    expect(fee).to_have_value("0.55")
+    assert len(calls) == 1
+    assert saved_drafts(assistant) == []
+    assistant.get_by_label("I confirm these reviewed values and any fields left blank.").check()
+    approve.evaluate("button => { button.click(); button.click(); }")
+    expect(assistant.get_by_text("Approved draft created.", exact=True)).to_be_visible()
+    [draft] = saved_drafts(assistant)
+    assert draft["fees"]["advisorFee"] == "0.55"
+    assert draft["strategy"]["keyFigures"]["totalInvestment"] == expected_capital
+    assert draft["strategy"]["keyFigures"]["incomeValue"] == ""
+
+
+def test_clarification_timeout_keeps_manual_review_and_pm_edits(
+    assistant: Page, sample_response: dict
+) -> None:
+    assistant.route(EXTRACT, lambda route: route.fulfill(json=sample_response))
+    assistant.route("**/api/clarifications", lambda route: route.fulfill(status=504))
+    notes = SAMPLE.read_text(encoding="utf-8")
+    enter_notes(assistant, notes)
+    fee = assistant.get_by_label("Annual adviser fee (%)", exact=True)
+    fee.fill("0.55")
+    expect(assistant.get_by_text("AI questions are unavailable.", exact=False)).to_be_visible()
+    expect(fee).to_have_value("0.55")
+    expect(assistant.get_by_role("textbox", name="Meeting notes")).to_have_value(notes)
+    assistant.get_by_label("I confirm these reviewed values and any fields left blank.").check()
+    expect(assistant.get_by_role("button", name="Approve & generate draft")).to_be_enabled()
+
+
+def delay_clarifications(page: Page) -> None:
+    page.evaluate(
+        """() => {
+            const fetchLocal = window.fetch.bind(window);
+            window.finishClarifications = [];
+            window.fetch = (url, options) => url === '/api/clarifications'
+              ? new Promise(resolve => window.finishClarifications.push(
+                  data => resolve(new Response(JSON.stringify(data)))))
+              : fetchLocal(url, options);
+        }"""
+    )
+
+
+def test_background_questions_preserve_pm_edits_and_do_not_block_approval(
+    assistant: Page, sample_response: dict
+) -> None:
+    assistant.route(EXTRACT, lambda route: route.fulfill(json=sample_response))
+    delay_clarifications(assistant)
+    enter_notes(assistant, SAMPLE.read_text(encoding="utf-8"))
+    assistant.wait_for_function("window.finishClarifications.length === 1")
+    amount = assistant.get_by_label("Investment capital", exact=True)
+    expect(amount).to_have_value("")
+    assistant.get_by_text("Review proposed ZAR 6,200,000", exact=True).click()
+    fee = assistant.get_by_label("Annual adviser fee (%)", exact=True)
+    fee.fill("0.55")
+    assistant.get_by_label("I confirm these reviewed values and any fields left blank.").check()
+    assistant.get_by_role("button", name="Approve & generate draft").click()
+    expect(assistant.get_by_text("Approved draft created.", exact=True)).to_be_visible()
+    [draft] = saved_drafts(assistant)
+    assert draft["strategy"]["keyFigures"]["totalInvestment"] == ""
+    assert draft["fees"]["advisorFee"] == "0.55"
+    assistant.evaluate(
+        """() => window.finishClarifications[0]({questions: [
+          {field: 'adviser_fee', question: 'Which fee was confirmed?', evidence: []},
+          {field: 'investment_amount', question: 'Is the capital confirmed?', evidence: []}
+        ]})"""
+    )
+    expect(assistant.get_by_text("Is the capital confirmed?", exact=True)).to_be_visible()
+    expect(assistant.get_by_text("Which fee was confirmed?", exact=True)).to_have_count(0)
+    expect(fee).to_have_value("0.55")
+    assert len(saved_drafts(assistant)) == 1
+
+
+def test_stale_clarification_cannot_mutate_new_review(
+    assistant: Page, sample_response: dict
+) -> None:
+    assistant.route(EXTRACT, lambda route: route.fulfill(json=sample_response))
+    delay_clarifications(assistant)
+    notes = SAMPLE.read_text(encoding="utf-8")
+    enter_notes(assistant, notes)
+    assistant.wait_for_function("window.finishClarifications.length === 1")
+    enter_notes(assistant, notes + " Another fictional fact.")
+    assistant.wait_for_function("window.finishClarifications.length === 2")
+    assistant.get_by_label("Investment capital", exact=True).fill("6200000")
+    assistant.evaluate(
+        """() => {
+            window.finishClarifications[0]({questions: [{field: 'horizon',
+                question: 'What old horizon was confirmed?', evidence: []}]});
+            window.finishClarifications[1]({questions: []});
+        }"""
+    )
+    expect(assistant.locator("#clarifications-status")).to_be_hidden()
+    expect(assistant.get_by_label("Investment capital", exact=True)).to_have_value("6200000")
+    expect(assistant.get_by_text("What old horizon was confirmed?")).to_have_count(0)
+
+
+def test_reconstructed_emma_missing_fields_remain_editable(assistant: Page) -> None:
+    notes = "Client: Emma Collins. First planning meeting. Investment budget and timing are open."
+    payload = fixture_response(notes, [])
+    assistant.route(EXTRACT, lambda route: route.fulfill(json=payload))
+    assistant.set_viewport_size({"width": 390, "height": 844})
+    with assistant.expect_response(lambda response: response.url.endswith("/api/clarifications")):
+        enter_notes(assistant, notes)
+    for label in ("Investment capital", "Monthly income", "Investment horizon"):
+        control = assistant.get_by_label(label, exact=True)
+        expect(control).to_have_value("")
+        expect(control).to_be_editable()
+        row = assistant.locator(".field").filter(has=control)
+        expect(row.get_by_text("Missing", exact=True)).to_be_visible()
+        expect(row.locator(".field-clarification")).to_be_hidden()
+    assert assistant.locator(".field-clarification:visible").count() == 0
+    assert assistant.evaluate("document.documentElement.scrollWidth === window.innerWidth")
