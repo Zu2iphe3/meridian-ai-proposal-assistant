@@ -163,3 +163,11 @@ iframe { display: block; width: 100%; height: 780px; border: 0; border-top: 1px 
   .panel-foot { align-items: stretch; flex-direction: column; }
   .extraction-meta { flex-direction: row; justify-content: space-between; gap: 6px; }
 }
+
+#clarifications-status { margin: 0 20px 8px; color: var(--muted); font-size: .85rem; }
+.field-clarification { margin-top: 8px; padding: 8px 10px; border-left: 2px solid #b59b70; background: #f8f4e9; border-radius: 3px; overflow-wrap: anywhere; }
+.field-clarification summary { cursor: pointer; font-size: .85rem; font-weight: 650; }
+.field-clarification details[open] summary { margin-bottom: 6px; }
+.field-clarification p { margin: 0; font-size: .87rem; }
+.field-clarification small { display: block; margin-top: 4px; color: var(--muted); }
+.clarification-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }

@@ -109,3 +109,11 @@ extraction preserves them. Note changes, a new extraction or a field edit
 invalidate approval. Conflicts and provisional evidence remain visible for PM
 review. Only the approved snapshot enters the handoff. The resulting draft
 opens in the vendor's independent editor.
+
+## Clarifications
+
+After extraction, the workspace requests local Qwen questions for material
+gaps. Questions appear on the relevant fields and quotes stay in View evidence.
+Source-backed capital estimates remain suggestions until the PM confirms or
+edits them. A deferred estimate stays out of the draft. Manual review and
+approval of the eligible snapshot remain available while Qwen runs or fails.

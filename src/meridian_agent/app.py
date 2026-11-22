@@ -8,6 +8,12 @@ from fastapi.responses import PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict
 
+from meridian_agent.clarifications import (
+    ClarificationRequest,
+    ClarificationResult,
+    clarification_targets,
+    generate_clarifications,
+)
 from meridian_agent.extraction import ExtractionError, ExtractionProvider, ExtractionResult, extract
 from meridian_agent.financial_verification import FinancialVerification, verify_financials
 from meridian_agent.ollama import OllamaProvider
@@ -68,6 +74,17 @@ async def extract_notes(
             **result.model_dump(),
             financial_verification=verify_financials(request.notes, result),
         )
+    except ExtractionError as exc:
+        raise HTTPException(exc.status, detail={"code": exc.code, "message": str(exc)}) from exc
+
+
+@app.post("/api/clarifications")
+async def clarify(request: ClarificationRequest) -> ClarificationResult:
+    targets = clarification_targets(request)
+    if not targets:
+        return ClarificationResult(questions=[])
+    try:
+        return await generate_clarifications(targets, get_extraction_provider())
     except ExtractionError as exc:
         raise HTTPException(exc.status, detail={"code": exc.code, "message": str(exc)}) from exc
 
