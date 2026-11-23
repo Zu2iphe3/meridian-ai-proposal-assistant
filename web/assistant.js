@@ -462,7 +462,7 @@ async function extractNotes(event) {
   event.preventDefault();
   const source = notes.value.trim();
   if (!source) {
-    notify("extraction-error", "Enter meeting notes or load the fictional sample.");
+    notify("extraction-error", "Enter meeting notes.");
     notes.focus();
     return;
   }
@@ -570,29 +570,6 @@ function resetCase() {
   notesChanged();
 }
 
-async function loadSample() {
-  if ((notes.value.trim() || state.extraction) &&
-      !confirm("Replace the current notes and review with the fictional sample?")) return;
-  const button = byId("load-sample");
-  const current = notes.value;
-  const revision = state.reviewVersion;
-  button.disabled = true;
-  try {
-    const response = await fetch("/api/examples/meeting-notes");
-    if (!response.ok) throw new Error("The fictional sample could not be loaded.");
-    const sample = await response.text();
-    if (notes.value !== current || state.reviewVersion !== revision) return;
-    resetCase();
-    notes.value = sample;
-    notesChanged();
-    notes.focus();
-  } catch (error) {
-    notify("extraction-error", error.message);
-  } finally {
-    button.disabled = false;
-  }
-}
-
 function loadModels() {
   try {
     state.models = listGeneratorModels(frame);
@@ -611,7 +588,6 @@ handoff.setReview({});
 notes.addEventListener("input", notesChanged);
 byId("notes-form").addEventListener("submit", extractNotes);
 byId("review-form").addEventListener("submit", event => event.preventDefault());
-byId("load-sample").addEventListener("click", loadSample);
 byId("new-case").addEventListener("click", () => {
   if (confirm("Start a new case? The current notes and review will be cleared.")) {
     resetCase();

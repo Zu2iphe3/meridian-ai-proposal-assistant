@@ -56,8 +56,7 @@ loopback and reads process environment variables. [Environment settings](.env.ex
 
 ## Using Meridian
 
-1. Select **Load fictional sample** or paste notes, then select
-   **Extract proposal details**.
+1. Paste meeting notes, then select **Extract proposal details**.
 2. Open **View evidence** to check a figure against the notes. Confirm an estimate,
    correct a value or defer a decision. Any clarification questions appear beside
    the relevant field.

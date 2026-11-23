@@ -80,11 +80,9 @@ def test_sample_keyboard_review_and_exactly_one_draft(
 ) -> None:
     assistant.route(EXTRACT, lambda route: route.fulfill(json=sample_response))
     capture(assistant, "desktop-notes.png")
-    sample = assistant.get_by_role("button", name="Load fictional sample")
-    sample.focus()
-    sample.press("Enter")
+    expect(assistant.get_by_role("button", name="Load fictional sample")).to_have_count(0)
     notes = assistant.get_by_role("textbox", name="Meeting notes")
-    expect(notes).to_have_value(SAMPLE.read_text(encoding="utf-8"))
+    notes.fill(SAMPLE.read_text(encoding="utf-8"))
     expect(notes).to_be_focused()
     submit = assistant.get_by_role("button", name="Extract proposal details")
     notes.press("Tab")
