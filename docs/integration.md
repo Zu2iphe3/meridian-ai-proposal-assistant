@@ -16,7 +16,7 @@ Original tool: `web/vendor/challenge-generator.html`  sha256: `bd20df4c79e70da57
 | 8 | Unknown `applyModel` ids are silently ignored. | Validate model id before loading. |
 | 9 | Caller fields win over model defaults (deep merge; arrays/scalars replaced). | Mapper sends only fields we can justify. |
 | 10 | Schema quirks: amounts under `strategy.keyFigures` only; digit strings; dropdown enums (horizon max "5 years+"). | Encode as validation rules (#5 and #6). For #6, add a regression test showing that an amount supplied only under `goalAssessment.keyFigures` is ignored by the generator and that the mapper emits monetary values under `strategy.keyFigures`. |
-| 11 | Tool has no field for open items; samples 02/03 put "[TO CONFIRM: ...]" inside `needs`. | See ADR D9; suggest an open-items field in the write-up. |
+| 11 | The tool has no dedicated field for open items. | Keep unresolved items in PM review. See ADR D9 for the policy on gap markers. |
 | 12 | Optional `loadProposal(obj, {preview:true})` opens preview instead of editor. | Not needed for MVP. |
 
 Not yet verified: file:// iframe behaviour (irrelevant if we serve over http), export/PDF flow.
