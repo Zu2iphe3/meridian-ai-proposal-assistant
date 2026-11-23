@@ -1,6 +1,6 @@
 # Engineering instructions
 
-Use the updated Meridian challenge pack in `challenge/` as the assessment source of truth. Use fictional data only. Read the architecture, integration notes, runtime policy and BOK before changing the workflow.
+Use the original Meridian challenge pack, retained privately, as the assessment source of truth. The `challenge/` directory contains the supplied fixtures used by the app and tests. Use fictional data only. Read the architecture, integration notes, runtime policy and BOK before changing the workflow.
 
 Keep the vanilla HTML/CSS/JS interface, same-origin generator iframe, FastAPI backend, Pydantic extraction, Ollama provider adapter, deterministic verification, provenance and proposal mapper. The portfolio manager reviews and approves the proposal before one call to the public `loadProposal()` API. Preserve the vendor HTML byte for byte. Require source evidence for figures, preserve uncertainty, flag gaps and never overwrite adviser corrections. Runtime rules live in `docs/agent-policy.md`. Record justified architectural or dependency changes in the BOK. Avoid unrelated edits and unnecessary infrastructure.
 

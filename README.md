@@ -1,54 +1,92 @@
 # Meridian AI Proposal Assistant
 
-A local-first companion that turns fictional portfolio-manager notes into an evidence-backed draft for review in the supplied Meridian Proposal Generator.
+Meridian is an AI agent that helps portfolio managers prepare investment proposals
+from meeting notes. The notes can be incomplete, contain competing financial
+figures, or describe decisions the client still needs to confirm.
 
-The assistant extracts and verifies information from typed notes, then lets the portfolio manager review and correct it before creating an editable draft in the original generator.
+Qwen extracts proposal details and cites the supporting passages. Python checks
+the evidence and financial values, and unresolved decisions stay visible for
+the portfolio manager to review. After the manager approves the review,
+Meridian opens an editable draft in the supplied Meridian Proposal Generator.
 
-The `challenge/` folder contains supplied reference material from the updated assessment pack, including the brief, schema, and fictional sample inputs and outputs.
+## Architecture
 
-Use Python 3.12 in a virtual environment. From the repository root:
-
-```text
-python -m pip install -e ".[dev]"
-python -m uvicorn meridian_agent.app:app
+```mermaid
+flowchart TB
+    N["Meeting notes"] --> A["FastAPI extraction endpoint"]
+    A --> Q["Qwen via Ollama · extract details and quotes"]
+    Q --> V["Python · verify evidence and financial values"]
+    V --> R["Portfolio manager · review and correct"]
+    V --> C["Qwen via Ollama · ask about source-backed uncertainty"]
+    C -.-> R
+    R -->|Explicit approval| M["Python and Pydantic · map approved values"]
+    M --> G["Original Meridian Proposal Generator · loadProposal()"]
 ```
 
-Start Ollama, then open [the assistant workspace](http://127.0.0.1:8000/). Load the fictional sample or enter meeting notes, review the values and evidence, then confirm and approve the draft.
+Built with Python, FastAPI, Pydantic, local Qwen 2.5 3B via Ollama, and HTML,
+CSS and JavaScript for the browser, with pytest and Playwright for testing.
 
-## Extract candidates locally
+FastAPI serves the workspace and the unchanged generator on the same origin.
+The PM retains control of investment decisions and the final proposal.
+[Review and handoff details](docs/integration.md)
 
-Start Ollama on loopback and use an installed local model. Defaults are `OLLAMA_HOST=http://127.0.0.1:11434`, `OLLAMA_MODEL=qwen2.5:3b` and `OLLAMA_TIMEOUT_SECONDS=180`. Set these environment variables before starting FastAPI to change them. Keep Ollama in local-only mode (`OLLAMA_NO_CLOUD=1`) when using meeting notes.
+## Getting started
 
-See `.env.example` for the process environment settings. Extraction uses one
-local inference request. The model proposes fields and supporting quotes. Python
-derives source status, checks money and conflicts, and accepts only the eight
-core fields. Other proposals are suggestions for the portfolio manager.
+Use Python 3.12, Ollama and a browser. The commands below are for Windows
+PowerShell. The initial dependency and model downloads require internet access.
 
-Example using fictional notes in PowerShell:
+Start Ollama in a separate window if it is not already running:
 
 ```powershell
-$body = @{ notes = (Get-Content challenge/sample-inputs/01-notes-retiree-income.txt -Raw) } | ConvertTo-Json
-Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/api/extract -ContentType 'application/json; charset=utf-8' -Body $body
+ollama serve
 ```
 
-The endpoint accepts up to 4,000 characters. It returns core fields, grounded
-conflicts, gap reasons and review candidates. Review candidates keep their
-proposed text, verified quote when available and disposition. Missing values
-stay blank for PM review. Provisional and conflicting information stays out of
-the accepted values. Financial verification and proposal mapping are subsequent
-steps.
+From the repository root, pull the model if needed, install the app and start
+FastAPI:
 
-## Checks
-
-```text
-python -m ruff check .
-python -m ruff format --check .
-python -m mypy src
-python -m pytest -m "not browser and not llm"
-python -m playwright install chromium
-python -m pytest -m browser
+```powershell
+ollama pull qwen2.5:3b
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
+.\.venv\Scripts\python.exe -m uvicorn meridian_agent.app:app --host 127.0.0.1 --port 8000
 ```
 
-To run the four fictional samples through Ollama, set `RUN_OLLAMA_SMOKE=1` and run `python -m pytest -m llm -q -s`. This check is opt-in and excluded from CI.
+Open the [local workspace](http://127.0.0.1:8000/). The app defaults to Ollama on
+loopback and reads process environment variables. [Environment settings](.env.example)
 
-See `docs/architecture.md`, `docs/integration.md` and `docs/bok/progress.md`.
+## Using Meridian
+
+1. Select **Load fictional sample** or paste notes, then select
+   **Extract proposal details**.
+2. Open **View evidence** to check a figure against the notes. Confirm an estimate,
+   correct a value or defer a decision. Any clarification questions appear beside
+   the relevant field.
+3. Confirm the reviewed values and select **Approve & generate draft**. The draft
+   opens in the [original Meridian Proposal Generator](web/vendor/challenge-generator.html)
+   for editing.
+
+The [fictional retirement notes](challenge/sample-inputs/01-notes-retiree-income.txt)
+describe about ZAR 6.2 million in capital and roughly ZAR 28,000 in monthly
+income. Check both passages and confirm the capital estimate before approving.
+
+## Testing and limitations
+
+With the development dependencies installed, install Chromium once and run
+the offline suite:
+
+```powershell
+.\.venv\Scripts\python.exe -m playwright install chromium
+.\.venv\Scripts\python.exe -m pytest -m "not llm" -q
+```
+
+The offline suite passed 234 tests, including browser checks for evidence,
+PM corrections and duplicate draft prevention. The suite uses deterministic
+model responses so it can run without Ollama.
+
+Live extraction took about 53–64 seconds in two local rehearsals. Clarification
+added about 30 seconds in one of those runs. The PM can continue reviewing
+while questions load. Qwen can miss details or skip relevant questions, and
+unresolved financial values require PM review before they can enter a draft.
+
+The workflow accepts typed or pasted text, including an existing transcript.
+Audio transcription is outside the current scope.
